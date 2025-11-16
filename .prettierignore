@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+build
+dist
+*.lock
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+.DS_Store
+*.log
+.env*.local
+.vercel
+.turbo
+
