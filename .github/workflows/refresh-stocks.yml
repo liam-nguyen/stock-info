@@ -15,7 +15,24 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           API_URL: ${{ secrets.API_URL || 'https://your-domain.vercel.app' }}
         run: |
-          curl -X POST \
+          echo "Calling API: $API_URL/api/cron/refresh-stocks?limit=10"
+          echo "Using CRON_SECRET: ${CRON_SECRET:0:10}..." # Show first 10 chars for debugging
+
+          response=$(curl -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "$API_URL/api/cron/refresh-stocks?limit=10"
+            -H "Content-Type: application/json" \
+            -L \
+            -w "\nHTTP Status: %{http_code}\n" \
+            -s "$API_URL/api/cron/refresh-stocks?limit=10")
+
+          echo "Response:"
+          echo "$response"
+
+          # Check if response contains success
+          if echo "$response" | grep -q '"success":true'; then
+            echo "✅ Stock refresh completed successfully"
+          else
+            echo "❌ Stock refresh may have failed - check response above"
+            exit 1
+          fi
         continue-on-error: true # Don't fail the workflow if the API call fails

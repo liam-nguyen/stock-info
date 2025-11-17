@@ -1,9 +1,10 @@
 // Endpoint to get all cached stock data from all sources
-// Only returns cached data - no auto-refresh (worker handles that)
+// Auto-fetches and caches missing symbols from Yahoo Finance
 
 import defineRoute from "@omer-x/next-openapi-route-handler";
 import { z } from "zod";
 import { getCachedStockData } from "@/lib/utils/stock-data-retriever";
+import { batchWriteToCollection } from "@/lib/db/cache-helpers";
 // Schema imports removed - not used in this route
 
 const RequestBodySchema = z.object({
@@ -15,10 +16,10 @@ export const { POST } = defineRoute({
   method: "POST",
   summary: "Get all cached stock data from all sources",
   description:
-    "Retrieve all cached stock data from all sources for multiple symbols. Returns cached data even if expired (worker handles refresh).",
+    "Retrieve all cached stock data from all sources for multiple symbols. Automatically fetches and caches missing symbols from Yahoo Finance. Returns cached data even if expired (worker handles refresh).",
   tags: ["Stocks"],
   requestBody: RequestBodySchema,
-  action: async ({ body }) => {
+  action: async ({ body }, request) => {
     const { symbols } = body;
 
     if (!symbols || symbols.length === 0) {
@@ -41,7 +42,111 @@ export const { POST } = defineRoute({
         }
       }
 
-      // Build response with errors for missing symbols
+      // If there are missing symbols, fetch them from Yahoo Finance and cache them
+      if (missingSymbols.length > 0) {
+        try {
+          // Get base URL from request
+          const baseUrl = new URL(request.url).origin;
+
+          // Fetch missing symbols from Yahoo Finance (parallelized in the endpoint)
+          const fetchResponse = await fetch(`${baseUrl}/api/stocks/yf`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ symbols: missingSymbols }),
+          });
+
+          if (fetchResponse.ok) {
+            const fetchData = (await fetchResponse.json()) as {
+              stocksData?: Array<Record<string, unknown>>;
+              failedToFetchSymbols?: string[];
+            };
+
+            // Process response from /api/stocks/yf
+            // Response format: { stocksData: [{ AAPL: {...} }, { MSFT: {...} }], failedToFetchSymbols: [] }
+            const sourceResults: Record<string, unknown> = {};
+
+            if (fetchData.stocksData) {
+              // Process stocksData array
+              for (const stockDataObj of fetchData.stocksData) {
+                if (stockDataObj && typeof stockDataObj === "object") {
+                  for (const [symbol, data] of Object.entries(stockDataObj)) {
+                    if (missingSymbols.includes(symbol)) {
+                      sourceResults[symbol] = data;
+                    }
+                  }
+                }
+              }
+
+              // Write all fetched data to cache (parallelized internally)
+              if (Object.keys(sourceResults).length > 0) {
+                try {
+                  await batchWriteToCollection("yf", sourceResults);
+
+                  // Add fetched data to results
+                  for (const [symbol, data] of Object.entries(sourceResults)) {
+                    if (!results[symbol]) {
+                      results[symbol] = {};
+                    }
+                    results[symbol].yf = data;
+                  }
+                } catch (writeError) {
+                  console.error(
+                    "Error writing fetched data to cache:",
+                    writeError
+                  );
+                  // Continue even if write fails - we still have the fetched data
+                  // Add fetched data to results even if cache write failed
+                  for (const [symbol, data] of Object.entries(sourceResults)) {
+                    if (!results[symbol]) {
+                      results[symbol] = {};
+                    }
+                    results[symbol].yf = data;
+                  }
+                }
+              }
+            }
+
+            // Handle failed symbols from fetch
+            if (
+              fetchData.failedToFetchSymbols &&
+              fetchData.failedToFetchSymbols.length > 0
+            ) {
+              // These will be added to _errors below
+              // Remove successfully fetched symbols from missingSymbols
+              for (const symbol of Object.keys(sourceResults)) {
+                const index = missingSymbols.indexOf(symbol);
+                if (index > -1) {
+                  missingSymbols.splice(index, 1);
+                }
+              }
+              // Add failed fetch symbols back to missingSymbols if not already there
+              for (const failedSymbol of fetchData.failedToFetchSymbols) {
+                if (!missingSymbols.includes(failedSymbol)) {
+                  missingSymbols.push(failedSymbol);
+                }
+              }
+            } else {
+              // All symbols were fetched successfully, clear missingSymbols
+              missingSymbols.length = 0;
+            }
+          } else {
+            console.error(
+              `Failed to fetch from Yahoo Finance: ${fetchResponse.status}`
+            );
+            // Keep missingSymbols as is for error reporting
+          }
+        } catch (fetchError) {
+          console.error(
+            "Error fetching missing symbols from Yahoo Finance:",
+            fetchError
+          );
+          // Keep missingSymbols as is for error reporting
+        }
+      }
+
+      // Build response with errors for any remaining missing symbols
       const response: Record<string, unknown> & {
         _errors?: Record<string, { error: string }>;
       } = { ...results };
@@ -50,7 +155,7 @@ export const { POST } = defineRoute({
         for (const symbol of missingSymbols) {
           if (response._errors) {
             response._errors[symbol] = {
-              error: `No cached data found for ${symbol}`,
+              error: `No cached data found for ${symbol} and failed to fetch from Yahoo Finance`,
             };
           }
         }
