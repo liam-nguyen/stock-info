@@ -64,7 +64,7 @@ export const { POST } = defineRoute({
       return Response.json({
         success: true,
         message: `Stock data for ${symbol} saved successfully`,
-        queryTime,
+        queryTime: queryTime.toISOString(),
       });
     } catch (error) {
       console.error("Error saving stock data:", error);
@@ -84,7 +84,9 @@ export const { POST } = defineRoute({
       content: z.object({
         success: z.boolean().describe("Operation success status"),
         message: z.string().describe("Success message"),
-        queryTime: z.date().describe("Time when data was saved"),
+        queryTime: z
+          .string()
+          .describe("Time when data was saved (ISO 8601 format)"),
       }),
     },
     500: {
