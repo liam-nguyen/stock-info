@@ -11,17 +11,26 @@
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
     "validate": "pnpm run type-check && pnpm run lint && pnpm run format:check",
-    "prepare": "husky install"
+    "extract:types": "tsx scripts/extract-full-types.ts",
+    "generate:schemas": "pnpm run extract:types && tsx scripts/generate-yahoo-finance-schemas.ts",
+    "prepare": "husky"
   },
   "dependencies": {
+    "@omer-x/next-openapi-json-generator": "^2.0.2",
+    "@omer-x/next-openapi-route-handler": "^2.0.0",
+    "mongoose": "^8.19.4",
     "next": "^16.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "swagger-ui-react": "^5.30.2",
+    "yahoo-finance2": "^3.10.1",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.2",
+    "@types/swagger-ui-react": "^5.18.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
     "eslint-config-next": "^16.0.0",
@@ -30,6 +39,8 @@
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
     "tailwindcss": "^3.4.17",
+    "ts-to-zod": "^5.0.1",
+    "tsx": "^4.20.6",
     "typescript": "^5.7.2"
   },
   "lint-staged": {

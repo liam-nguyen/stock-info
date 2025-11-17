@@ -1,0 +1,21 @@
+name: Refresh Stock Data
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: "*/5 * * * *"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call refresh endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          API_URL: ${{ secrets.API_URL || 'https://your-domain.vercel.app' }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$API_URL/api/cron/refresh-stocks?limit=10"
+        continue-on-error: true # Don't fail the workflow if the API call fails
