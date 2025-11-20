@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 import dbConnect from "@/lib/db/mongodb";
 import { getScraperClass } from "@/lib/utils/scraper-registry";
-import { BaseScraper } from "@/lib/utils/scraper";
+import { ScraperResult } from "@/lib/utils/scraper";
 import { getSourceModel } from "@/lib/db/cache-helpers";
 
 export interface ScraperRefreshResult {
@@ -74,7 +74,7 @@ export async function refreshScraperTickers(): Promise<ScraperRefreshResult> {
         }
 
         // Instantiate scraper
-        const scraper: BaseScraper = new ScraperClass();
+        const scraper = new ScraperClass();
 
         console.log(
           `Processing ${tickers.length} tickers for scraper ${scraperName}: ${tickers.join(", ")}`
@@ -102,23 +102,25 @@ export async function refreshScraperTickers(): Promise<ScraperRefreshResult> {
         // Write to cache using compound key (symbol + source)
         try {
           const Model = getSourceModel("scraper");
-          const writePromises = scraperResults.map((scraperResult) => {
-            const updateData = {
-              symbol: scraperResult.symbol,
-              price: scraperResult.price,
-              source: scraperResult.source,
-              queryTime: scraperResult.queryTime,
-            };
-            // Use compound key (symbol + source) for upsert
-            return Model.findOneAndUpdate(
-              { symbol: scraperResult.symbol, source: scraperResult.source },
-              updateData,
-              {
-                upsert: true,
-                new: true,
-              }
-            );
-          });
+          const writePromises = scraperResults.map(
+            (scraperResult: ScraperResult) => {
+              const updateData = {
+                symbol: scraperResult.symbol,
+                price: scraperResult.price,
+                source: scraperResult.source,
+                queryTime: scraperResult.queryTime,
+              };
+              // Use compound key (symbol + source) for upsert
+              return Model.findOneAndUpdate(
+                { symbol: scraperResult.symbol, source: scraperResult.source },
+                updateData,
+                {
+                  upsert: true,
+                  new: true,
+                }
+              );
+            }
+          );
           await Promise.all(writePromises);
 
           // Count successes
@@ -155,7 +157,7 @@ export async function refreshScraperTickers(): Promise<ScraperRefreshResult> {
 
         // Check for failed tickers (tickers that were requested but not returned)
         const successfulSymbols = new Set(
-          scraperResults.map((r) => r.symbol.toUpperCase())
+          scraperResults.map((r: ScraperResult) => r.symbol.toUpperCase())
         );
         for (const ticker of tickers) {
           if (!successfulSymbols.has(ticker.toUpperCase())) {

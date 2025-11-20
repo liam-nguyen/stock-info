@@ -145,7 +145,9 @@ export const { POST } = defineRoute({
                 z.object({
                   price: z.number().describe("Stock price"),
                   source: z.string().describe("Scraper source identifier"),
-                  queryTime: z.date().describe("Time when data was queried"),
+                  queryTime: z
+                    .string()
+                    .describe("Time when data was queried (ISO 8601 format)"),
                 })
               )
             )

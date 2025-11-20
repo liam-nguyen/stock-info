@@ -2,10 +2,15 @@ import { BaseScraper } from "./scraper";
 import { FidelityScraper } from "./fidelity-scraper";
 
 /**
+ * Type for a concrete scraper class that extends BaseScraper
+ */
+type ScraperClassConstructor = new () => BaseScraper;
+
+/**
  * Registry mapping scraper names to their class constructors
  * Add new scrapers here as they are created
  */
-const scraperRegistry: Record<string, typeof BaseScraper> = {
+const scraperRegistry: Record<string, ScraperClassConstructor> = {
   Fidelity: FidelityScraper,
 };
 
@@ -16,6 +21,6 @@ const scraperRegistry: Record<string, typeof BaseScraper> = {
  */
 export function getScraperClass(
   scraperName: string
-): typeof BaseScraper | null {
+): ScraperClassConstructor | null {
   return scraperRegistry[scraperName] || null;
 }
