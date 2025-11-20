@@ -80,13 +80,23 @@ async function getChromiumExecutablePath(): Promise<string | undefined> {
  * Get Puppeteer launch arguments for serverless environments
  */
 async function getLaunchArgs(): Promise<string[]> {
-  const args = ["--no-sandbox", "--disable-setuid-sandbox"];
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage", // Fixes issues with shared memory in containerized environments
+    "--disable-gpu", // GPU is not needed for headless scraping
+    "--no-first-run",
+    "--no-zygote",
+    "--single-process", // Helps in low-resource environments
+  ];
 
   if (isServerlessEnvironment()) {
     const chromium = await loadChromium();
     if (chromium) {
       try {
-        args.push(...chromium.args);
+        // Add chromium-specific args but filter out duplicates if necessary
+        const chromiumArgs = chromium.args;
+        args.push(...chromiumArgs);
       } catch (error) {
         console.warn(
           "Failed to get args from @sparticuz/chromium-min, using defaults:",
