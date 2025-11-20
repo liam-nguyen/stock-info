@@ -53,13 +53,18 @@ export function batchNeedsRefresh(
  * @returns Mongoose model for the source
  */
 export function getSourceModel(source: string) {
-  // For now, we only have YfStock model
-  // In the future, this can be extended to support other sources
   if (source === "yf") {
     // Dynamic import to avoid circular dependencies
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const YfStock = require("@/models/mongodb/yf-stock").default;
     return YfStock;
+  }
+
+  if (source === "scraper") {
+    // Dynamic import to avoid circular dependencies
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ScraperStock = require("@/models/mongodb/scraper-stock").default;
+    return ScraperStock;
   }
 
   throw new Error(`Unknown source: ${source}`);

@@ -34,7 +34,7 @@ export async function refreshOldestStocks(
 
   try {
     // Get all available sources
-    const knownSources = ["yf"]; // Add other sources here as they're added
+    const knownSources = ["yf", "scraper"]; // Add other sources here as they're added
 
     // For each source, get the oldest stocks
     for (const source of knownSources) {

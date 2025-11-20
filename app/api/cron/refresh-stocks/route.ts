@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Get limit from query param (default: 10)
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const limit = parseInt(searchParams.get("limit") || "10", 10) || 10;
 
     // Get base URL from request
     const baseUrl = new URL(request.url).origin;
