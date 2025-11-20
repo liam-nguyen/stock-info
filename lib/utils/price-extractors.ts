@@ -83,26 +83,50 @@ export function extractPriceFromYf(data: unknown): PriceResult | null {
 
 /**
  * Extract price from scraper data structure
- * @param data - Scraper data object
+ * @param data - Scraper data object (can be nested by source name or flat)
  * @returns PriceResult with price and source, or null if price not found
  */
 export function extractPriceFromScraper(data: unknown): PriceResult | null {
   try {
-    // Placeholder for future scraper implementation
-    // TODO: Implement scraper price extraction when scraper source is added
-    if (
-      !data ||
-      typeof data !== "object" ||
-      !("price" in data) ||
-      typeof (data as { price: unknown }).price !== "number"
-    ) {
+    if (!data || typeof data !== "object") {
       return null;
     }
 
-    return {
-      price: (data as { price: number }).price,
-      source: "scraper",
-    };
+    // Handle nested structure: { "fidelity": { price, source, queryTime } }
+    // or flat structure: { price, source, queryTime }
+    const dataObj = data as Record<string, unknown>;
+
+    // Check if it's a nested structure (object with source names as keys)
+    const keys = Object.keys(dataObj);
+    if (
+      keys.length > 0 &&
+      typeof dataObj[keys[0]] === "object" &&
+      dataObj[keys[0]] !== null
+    ) {
+      // It's nested - get the first source's data
+      const firstSourceData = dataObj[keys[0]] as Record<string, unknown>;
+      if (
+        "price" in firstSourceData &&
+        typeof firstSourceData.price === "number"
+      ) {
+        // Use the source name from the nested key, or fall back to the source field
+        const sourceName = (firstSourceData.source as string) || keys[0];
+        return {
+          price: firstSourceData.price as number,
+          source: sourceName,
+        };
+      }
+    }
+
+    // Handle flat structure: { price, source, queryTime }
+    if ("price" in dataObj && typeof dataObj.price === "number") {
+      return {
+        price: dataObj.price as number,
+        source: (dataObj.source as string) || "scraper",
+      };
+    }
+
+    return null;
   } catch (error) {
     console.error("Error extracting price from scraper data:", error);
     return null;

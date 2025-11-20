@@ -3,6 +3,7 @@
 
 import { NextRequest } from "next/server";
 import { refreshOldestStocks } from "@/lib/workers/stock-refresh-worker";
+import { refreshScraperTickers } from "@/lib/workers/scraper-refresh-worker";
 
 export async function POST(request: NextRequest) {
   // Security: Check for CRON_SECRET
@@ -42,28 +43,57 @@ export async function POST(request: NextRequest) {
 
     console.log(`Starting stock refresh worker: limit=${limit}`);
 
-    // Call the refresh worker
-    const result = await refreshOldestStocks(limit, baseUrl);
+    // Call both refresh workers in parallel
+    const [yfResult, scraperResult] = await Promise.all([
+      refreshOldestStocks(limit, baseUrl),
+      refreshScraperTickers(),
+    ]);
+
+    // Combine results
+    const combinedProcessed = yfResult.processed + scraperResult.processed;
+    const combinedSucceeded = yfResult.succeeded + scraperResult.succeeded;
+    const combinedFailed = yfResult.failed + scraperResult.failed;
+    const combinedErrors = [...yfResult.errors, ...scraperResult.errors];
 
     // Log summary
     console.log(
-      `Stock refresh completed: ${result.succeeded} succeeded, ${result.failed} failed out of ${result.processed} processed`
+      `YF refresh completed: ${yfResult.succeeded} succeeded, ${yfResult.failed} failed out of ${yfResult.processed} processed`
+    );
+    console.log(
+      `Scraper refresh completed: ${scraperResult.succeeded} succeeded, ${scraperResult.failed} failed out of ${scraperResult.processed} processed`
+    );
+    console.log(
+      `Combined refresh completed: ${combinedSucceeded} succeeded, ${combinedFailed} failed out of ${combinedProcessed} processed`
     );
 
     // Log all errors
-    if (result.errors.length > 0) {
+    if (combinedErrors.length > 0) {
       console.error(
         "Errors during refresh:",
-        JSON.stringify(result.errors, null, 2)
+        JSON.stringify(combinedErrors, null, 2)
       );
     }
 
     return Response.json({
       success: true,
-      processed: result.processed,
-      succeeded: result.succeeded,
-      failed: result.failed,
-      errors: result.errors,
+      yf: {
+        processed: yfResult.processed,
+        succeeded: yfResult.succeeded,
+        failed: yfResult.failed,
+        errors: yfResult.errors,
+      },
+      scraper: {
+        processed: scraperResult.processed,
+        succeeded: scraperResult.succeeded,
+        failed: scraperResult.failed,
+        errors: scraperResult.errors,
+      },
+      combined: {
+        processed: combinedProcessed,
+        succeeded: combinedSucceeded,
+        failed: combinedFailed,
+        errors: combinedErrors,
+      },
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

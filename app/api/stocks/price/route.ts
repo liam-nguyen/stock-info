@@ -52,39 +52,83 @@ export const { POST } = defineRoute({
 
         // Try each source in priority order
         for (const source of SOURCE_PRIORITY) {
-          if (cachedData[symbol] && cachedData[symbol][source]) {
-            const sourceData = cachedData[symbol][source];
-            const priceResult = extractPriceFromSource(source, sourceData);
+          if (source === "scraper") {
+            // For scraper, check all scraper sources (e.g., "fidelity")
+            // Scraper data is stored directly under source names, not under "scraper"
+            if (cachedData[symbol]) {
+              // Get all scraper sources for this symbol
+              const Model = getSourceModel("scraper");
+              const scraperDocs = await Model.find({ symbol }).lean();
 
-            if (priceResult) {
-              // Get queryTime from the cached document
-              try {
-                const Model = getSourceModel(source);
-                const cachedDoc = await Model.findOne({ symbol }).lean();
-                const queryTime = cachedDoc?.queryTime
-                  ? new Date(cachedDoc.queryTime).toISOString()
-                  : new Date().toISOString();
-
-                results[symbol] = {
-                  price: priceResult.price,
-                  source: priceResult.source,
-                  queryTime,
+              // Try each scraper source
+              for (const scraperDoc of scraperDocs) {
+                const scraperSource = scraperDoc.source as string;
+                const scraperData = {
+                  price: scraperDoc.price,
+                  source: scraperSource,
+                  queryTime: scraperDoc.queryTime,
                 };
-                priceFound = true;
-                break; // Found price, move to next symbol
-              } catch (error) {
-                console.error(
-                  `Error getting queryTime for ${symbol} from ${source}:`,
-                  error
+
+                const priceResult = extractPriceFromSource(
+                  "scraper",
+                  scraperData
                 );
-                // Still use the price even if we can't get queryTime
-                results[symbol] = {
-                  price: priceResult.price,
-                  source: priceResult.source,
-                  queryTime: new Date().toISOString(),
-                };
-                priceFound = true;
-                break;
+
+                if (priceResult) {
+                  const queryTime = scraperDoc.queryTime
+                    ? new Date(scraperDoc.queryTime).toISOString()
+                    : new Date().toISOString();
+
+                  results[symbol] = {
+                    price: priceResult.price,
+                    source: priceResult.source,
+                    queryTime,
+                  };
+                  priceFound = true;
+                  break; // Found price from scraper, move to next symbol
+                }
+              }
+
+              if (priceFound) {
+                break; // Found price, move to next symbol
+              }
+            }
+          } else {
+            // For other sources (like "yf"), check the standard structure
+            if (cachedData[symbol] && cachedData[symbol][source]) {
+              const sourceData = cachedData[symbol][source];
+              const priceResult = extractPriceFromSource(source, sourceData);
+
+              if (priceResult) {
+                // Get queryTime from the cached document
+                try {
+                  const Model = getSourceModel(source);
+                  const cachedDoc = await Model.findOne({ symbol }).lean();
+                  const queryTime = cachedDoc?.queryTime
+                    ? new Date(cachedDoc.queryTime).toISOString()
+                    : new Date().toISOString();
+
+                  results[symbol] = {
+                    price: priceResult.price,
+                    source: priceResult.source,
+                    queryTime,
+                  };
+                  priceFound = true;
+                  break; // Found price, move to next symbol
+                } catch (error) {
+                  console.error(
+                    `Error getting queryTime for ${symbol} from ${source}:`,
+                    error
+                  );
+                  // Still use the price even if we can't get queryTime
+                  results[symbol] = {
+                    price: priceResult.price,
+                    source: priceResult.source,
+                    queryTime: new Date().toISOString(),
+                  };
+                  priceFound = true;
+                  break;
+                }
               }
             }
           }
