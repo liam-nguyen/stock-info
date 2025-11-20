@@ -51,7 +51,11 @@ async function getChromiumExecutablePath(): Promise<string | undefined> {
     const chromium = await loadChromium();
     if (chromium) {
       try {
-        const path = chromium.executablePath();
+        // For the 'min' package, we need to provide the location of the binary
+        // Using a public URL for the compatible Chromium binary
+        const path = chromium.executablePath(
+          "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"
+        );
         // Handle both sync and async executablePath
         return typeof path === "string" ? path : await path;
       } catch (error) {
