@@ -18,7 +18,7 @@
   "dependencies": {
     "@omer-x/next-openapi-json-generator": "^2.0.2",
     "@omer-x/next-openapi-route-handler": "^2.0.0",
-    "@sparticuz/chromium": "^131.0.0",
+    "@sparticuz/chromium-min": "^131.0.0",
     "mongoose": "^8.19.4",
     "next": "^16.0.0",
     "puppeteer-core": "^23.11.1",

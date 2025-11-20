@@ -2,7 +2,27 @@ import puppeteer, { Browser, Page } from "puppeteer-core";
 
 // Type-only import to satisfy TypeScript and build analysis
 // The actual module is imported dynamically at runtime
-type ChromiumModule = typeof import("@sparticuz/chromium");
+type ChromiumModule = typeof import("@sparticuz/chromium-min");
+
+// Helper to load chromium module - tries multiple methods
+async function loadChromium(): Promise<ChromiumModule | null> {
+  try {
+    // Method 1: Try require (works in Node.js/serverless)
+    if (typeof require !== "undefined") {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        return require("@sparticuz/chromium-min") as ChromiumModule;
+      } catch {
+        // require failed, try import
+      }
+    }
+    // Method 2: Try dynamic import
+    return await import("@sparticuz/chromium-min");
+  } catch (error) {
+    console.error("Failed to load @sparticuz/chromium-min:", error);
+    return null;
+  }
+}
 
 export interface ScraperResult {
   symbol: string;
@@ -28,23 +48,23 @@ function isServerlessEnvironment(): boolean {
  */
 async function getChromiumExecutablePath(): Promise<string | undefined> {
   if (isServerlessEnvironment()) {
-    try {
-      // Use Function constructor to create a truly dynamic import
-      // This prevents Turbopack from statically analyzing the import
-      const importChromium = new Function(
-        'return import("@sparticuz/chromium")'
-      );
-      const chromium = (await importChromium()) as ChromiumModule;
-      const path = chromium.executablePath();
-      // Handle both sync and async executablePath
-      return typeof path === "string" ? path : await path;
-    } catch (error) {
+    const chromium = await loadChromium();
+    if (chromium) {
+      try {
+        const path = chromium.executablePath();
+        // Handle both sync and async executablePath
+        return typeof path === "string" ? path : await path;
+      } catch (error) {
+        console.warn(
+          "Failed to get executable path from @sparticuz/chromium-min:",
+          error
+        );
+      }
+    } else {
       console.warn(
-        "Failed to load @sparticuz/chromium, falling back to default:",
-        error
+        "@sparticuz/chromium-min package not found. " +
+          "Make sure it's installed: pnpm add @sparticuz/chromium-min"
       );
-      // In serverless, if chromium is not available, we might need to use system Chrome
-      // or handle this error appropriately
     }
   }
   // For local development, puppeteer-core will look for Chrome/Chromium in PATH
@@ -59,19 +79,16 @@ async function getLaunchArgs(): Promise<string[]> {
   const args = ["--no-sandbox", "--disable-setuid-sandbox"];
 
   if (isServerlessEnvironment()) {
-    try {
-      // Use Function constructor to create a truly dynamic import
-      // This prevents Turbopack from statically analyzing the import
-      const importChromium = new Function(
-        'return import("@sparticuz/chromium")'
-      );
-      const chromium = (await importChromium()) as ChromiumModule;
-      args.push(...chromium.args);
-    } catch (error) {
-      console.warn(
-        "Failed to load @sparticuz/chromium args, using defaults:",
-        error
-      );
+    const chromium = await loadChromium();
+    if (chromium) {
+      try {
+        args.push(...chromium.args);
+      } catch (error) {
+        console.warn(
+          "Failed to get args from @sparticuz/chromium-min, using defaults:",
+          error
+        );
+      }
     }
   }
 
@@ -98,6 +115,14 @@ export abstract class BaseScraper {
     if (!this.browser) {
       const executablePath = await getChromiumExecutablePath();
       const args = await getLaunchArgs();
+
+      // In serverless environments, we must have an executablePath
+      if (isServerlessEnvironment() && !executablePath) {
+        throw new Error(
+          "Chromium executable path is required in serverless environment. " +
+            "Make sure @sparticuz/chromium-min is installed and available."
+        );
+      }
 
       this.browser = await puppeteer.launch({
         headless: true,
