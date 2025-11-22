@@ -2,6 +2,10 @@
 
 A Next.js TypeScript API repository with automatic OpenAPI documentation generation.
 
+> **⚠️ IMPORTANT:** This project uses **pnpm**. Do NOT use npm or yarn!  
+> If you accidentally run `npm install`, you'll see an error - just use `pnpm install` instead.  
+> Install pnpm: `npm install -g pnpm`
+
 ## Features
 
 - **Next.js 16** with App Router
