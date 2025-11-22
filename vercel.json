@@ -1,4 +1,5 @@
 {
+  "installCommand": "pnpm install && pnpm add @sparticuz/chromium@^131.0.0",
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 60,

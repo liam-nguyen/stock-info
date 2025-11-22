@@ -2,7 +2,7 @@ import puppeteer, { Browser, Page } from "puppeteer-core";
 
 // Type-only import to satisfy TypeScript and build analysis
 // The actual module is imported dynamically at runtime
-type ChromiumModule = typeof import("@sparticuz/chromium-min");
+type ChromiumModule = typeof import("@sparticuz/chromium");
 
 // Helper to load chromium module - tries multiple methods
 async function loadChromium(): Promise<ChromiumModule | null> {
@@ -11,15 +11,15 @@ async function loadChromium(): Promise<ChromiumModule | null> {
     if (typeof require !== "undefined") {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require("@sparticuz/chromium-min") as ChromiumModule;
+        return require("@sparticuz/chromium") as ChromiumModule;
       } catch {
         // require failed, try import
       }
     }
     // Method 2: Try dynamic import
-    return await import("@sparticuz/chromium-min");
+    return await import("@sparticuz/chromium");
   } catch (error) {
-    console.error("Failed to load @sparticuz/chromium-min:", error);
+    console.error("Failed to load @sparticuz/chromium:", error);
     return null;
   }
 }
@@ -51,23 +51,19 @@ async function getChromiumExecutablePath(): Promise<string | undefined> {
     const chromium = await loadChromium();
     if (chromium) {
       try {
-        // For the 'min' package, we need to provide the location of the binary
-        // Using a public URL for the compatible Chromium binary
-        const path = chromium.executablePath(
-          "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"
-        );
-        // Handle both sync and async executablePath
-        return typeof path === "string" ? path : await path;
+        // The full package includes the binary and downloads it automatically
+        const path = await chromium.executablePath();
+        return path;
       } catch (error) {
         console.warn(
-          "Failed to get executable path from @sparticuz/chromium-min:",
+          "Failed to get executable path from @sparticuz/chromium:",
           error
         );
       }
     } else {
       console.warn(
-        "@sparticuz/chromium-min package not found. " +
-          "Make sure it's installed: pnpm add @sparticuz/chromium-min"
+        "@sparticuz/chromium package not found. " +
+          "Make sure it's installed: pnpm add @sparticuz/chromium"
       );
     }
   }
@@ -99,7 +95,7 @@ async function getLaunchArgs(): Promise<string[]> {
         args.push(...chromiumArgs);
       } catch (error) {
         console.warn(
-          "Failed to get args from @sparticuz/chromium-min, using defaults:",
+          "Failed to get args from @sparticuz/chromium, using defaults:",
           error
         );
       }
@@ -134,7 +130,7 @@ export abstract class BaseScraper {
       if (isServerlessEnvironment() && !executablePath) {
         throw new Error(
           "Chromium executable path is required in serverless environment. " +
-            "Make sure @sparticuz/chromium-min is installed and available."
+            "Make sure @sparticuz/chromium is installed and available."
         );
       }
 

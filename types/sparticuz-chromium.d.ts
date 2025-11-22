@@ -1,5 +1,5 @@
-declare module "@sparticuz/chromium-min" {
-  export function executablePath(input?: string): Promise<string> | string;
+declare module "@sparticuz/chromium" {
+  export function executablePath(): Promise<string>;
   export const args: string[];
   export const headless: boolean;
   export const defaultViewport: {
