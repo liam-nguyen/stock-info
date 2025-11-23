@@ -10,9 +10,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
-    "validate": "pnpm run type-check && pnpm run lint && pnpm run format:check",
+    "validate": "npm run type-check && npm run lint && npm run format:check",
     "extract:types": "tsx scripts/extract-full-types.ts",
-    "generate:schemas": "pnpm run extract:types && tsx scripts/generate-yahoo-finance-schemas.ts",
+    "generate:schemas": "npm run extract:types && tsx scripts/generate-yahoo-finance-schemas.ts",
     "prepare": "husky"
   },
   "dependencies": {
