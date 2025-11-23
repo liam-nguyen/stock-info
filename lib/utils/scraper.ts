@@ -6,17 +6,14 @@ type ChromiumModule = typeof import("@sparticuz/chromium");
 
 // Helper to load chromium module - tries multiple methods
 async function loadChromium(): Promise<ChromiumModule | null> {
+  // Skip loading in local development if PUPPETEER_EXECUTABLE_PATH is set
+  if (!isServerlessEnvironment() && process.env.PUPPETEER_EXECUTABLE_PATH) {
+    console.log("Using local Chrome, skipping @sparticuz/chromium");
+    return null;
+  }
+
   try {
-    // Method 1: Try require (works in Node.js/serverless)
-    if (typeof require !== "undefined") {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require("@sparticuz/chromium") as ChromiumModule;
-      } catch {
-        // require failed, try import
-      }
-    }
-    // Method 2: Try dynamic import
+    // Dynamic import - package is installed as optionalDependency
     return await import("@sparticuz/chromium");
   } catch (error) {
     console.error("Failed to load @sparticuz/chromium:", error);
