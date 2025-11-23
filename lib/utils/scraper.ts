@@ -44,65 +44,55 @@ function isServerlessEnvironment(): boolean {
 }
 
 /**
- * Get Chromium executable path for serverless environments
+ * Get Chromium configuration for serverless environments
  */
-async function getChromiumExecutablePath(): Promise<string | undefined> {
+async function getChromiumConfig(): Promise<{
+  executablePath?: string;
+  args: string[];
+  headless: boolean;
+}> {
   if (isServerlessEnvironment()) {
     const chromium = await loadChromium();
     if (chromium) {
       try {
-        // The full package includes the binary and downloads it automatically
-        const path = await chromium.executablePath();
-        return path;
+        // Use @sparticuz/chromium's configuration
+        // This package handles all the necessary setup for Vercel/Lambda
+        const executablePath = await chromium.executablePath();
+        console.log("Using Chromium from @sparticuz/chromium:", executablePath);
+
+        return {
+          executablePath,
+          args: chromium.args, // Use chromium's args directly - they include all necessary flags
+          headless: chromium.headless,
+        };
       } catch (error) {
-        console.warn(
-          "Failed to get executable path from @sparticuz/chromium:",
+        console.error(
+          "Failed to load @sparticuz/chromium configuration:",
           error
         );
       }
     } else {
       console.warn(
         "@sparticuz/chromium package not found. " +
-          "Make sure it's installed: pnpm add @sparticuz/chromium"
+          "Make sure it's installed: npm install @sparticuz/chromium"
       );
     }
   }
-  // For local development, puppeteer-core will look for Chrome/Chromium in PATH
-  // or use the PUPPETEER_EXECUTABLE_PATH environment variable
-  return process.env.PUPPETEER_EXECUTABLE_PATH;
-}
 
-/**
- * Get Puppeteer launch arguments for serverless environments
- */
-async function getLaunchArgs(): Promise<string[]> {
-  const args = [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage", // Fixes issues with shared memory in containerized environments
-    "--disable-gpu", // GPU is not needed for headless scraping
-    "--no-first-run",
-    "--no-zygote",
-    "--single-process", // Helps in low-resource environments
-  ];
-
-  if (isServerlessEnvironment()) {
-    const chromium = await loadChromium();
-    if (chromium) {
-      try {
-        // Add chromium-specific args but filter out duplicates if necessary
-        const chromiumArgs = chromium.args;
-        args.push(...chromiumArgs);
-      } catch (error) {
-        console.warn(
-          "Failed to get args from @sparticuz/chromium, using defaults:",
-          error
-        );
-      }
-    }
-  }
-
-  return args;
+  // Fallback for local development
+  return {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-zygote",
+      "--single-process",
+    ],
+    headless: true,
+  };
 }
 
 /**
@@ -123,11 +113,10 @@ export abstract class BaseScraper {
    */
   protected async initBrowser(): Promise<void> {
     if (!this.browser) {
-      const executablePath = await getChromiumExecutablePath();
-      const args = await getLaunchArgs();
+      const config = await getChromiumConfig();
 
       // In serverless environments, we must have an executablePath
-      if (isServerlessEnvironment() && !executablePath) {
+      if (isServerlessEnvironment() && !config.executablePath) {
         throw new Error(
           "Chromium executable path is required in serverless environment. " +
             "Make sure @sparticuz/chromium is installed and available."
@@ -135,9 +124,9 @@ export abstract class BaseScraper {
       }
 
       this.browser = await puppeteer.launch({
-        headless: true,
-        args,
-        ...(executablePath && { executablePath }),
+        headless: config.headless,
+        args: config.args,
+        ...(config.executablePath && { executablePath: config.executablePath }),
       });
     }
     if (!this.page) {
