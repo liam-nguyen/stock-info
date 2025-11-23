@@ -5,6 +5,9 @@ import { z } from "zod";
 import { runScrapers } from "@/lib/utils/scraper-helper";
 import { getSourceModel } from "@/lib/db/cache-helpers";
 import { BaseScraper } from "@/lib/utils/scraper";
+import { getScraperClass } from "@/lib/utils/scraper-registry";
+import fs from "fs";
+import path from "path";
 
 export const { POST } = defineRoute({
   operationId: "getStocksDataFromScrapers",
@@ -29,11 +32,57 @@ export const { POST } = defineRoute({
       );
     }
 
-    // Get registered scrapers
-    // TODO: User will add child scraper instances here
+    // Load scraper configuration from scrappedTickers.json
     const scrapers: BaseScraper[] = [];
+    try {
+      const configPath = path.join(
+        process.cwd(),
+        "lib",
+        "data",
+        "scrappedTickers.json"
+      );
+      const configData = fs.readFileSync(configPath, "utf-8");
+      const config = JSON.parse(configData) as Record<string, string[]>;
 
-    if (scrapers.length === 0) {
+      // Get symbols that are in the config and requested
+      const symbolsToScrape = symbols.filter((symbol) => {
+        return Object.values(config).some((configSymbols) =>
+          configSymbols.includes(symbol)
+        );
+      });
+
+      // If no symbols need scraping, return empty results
+      if (symbolsToScrape.length === 0) {
+        return Response.json({
+          stocksData: [],
+          failedToFetchSymbols: symbols,
+        });
+      }
+
+      // Create scraper instances for the scrapers that have matching symbols
+      for (const [scraperName, configSymbols] of Object.entries(config)) {
+        const relevantSymbols = symbolsToScrape.filter((symbol) =>
+          configSymbols.includes(symbol)
+        );
+
+        if (relevantSymbols.length > 0) {
+          const ScraperClass = getScraperClass(scraperName);
+          if (ScraperClass) {
+            scrapers.push(new ScraperClass());
+          } else {
+            console.warn(`Scraper "${scraperName}" not found in registry`);
+          }
+        }
+      }
+
+      if (scrapers.length === 0) {
+        return Response.json({
+          stocksData: [],
+          failedToFetchSymbols: symbols,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading scraper configuration:", error);
       return Response.json({
         stocksData: [],
         failedToFetchSymbols: symbols,

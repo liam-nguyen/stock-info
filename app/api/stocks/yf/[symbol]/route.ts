@@ -25,119 +25,150 @@ export const { GET } = defineRoute({
   }),
   action: async ({ pathParams }) => {
     const symbol = pathParams.symbol;
-    const yf = new YahooFinance({
-      suppressNotices: ["yahooSurvey"],
-    });
 
-    // Get financial statements using fundamentalsTimeSeries (replaces the deprecated modules)
-    // Fetch data for the last 5 years
-    const period1 = new Date();
-    period1.setFullYear(period1.getFullYear() - 5);
+    try {
+      const yf = new YahooFinance({
+        suppressNotices: ["yahooSurvey"],
+      });
 
-    // Parallelize all API calls for better performance
-    const [
-      quoteSummary,
-      allQuarterly,
-      allAnnual,
-      allTrailing,
-      insights,
-      chart,
-    ] = await Promise.all([
-      yf.quoteSummary(
-        symbol,
-        {
-          modules: [
-            "assetProfile",
-            "calendarEvents",
-            "defaultKeyStatistics",
-            "earnings",
-            "earningsHistory",
-            "earningsTrend",
-            "financialData",
-            "fundOwnership",
-            "fundPerformance",
-            "fundProfile",
-            "indexTrend",
-            "industryTrend",
-            "insiderHolders",
-            "insiderTransactions",
-            "institutionOwnership",
-            "majorDirectHolders",
-            "majorHoldersBreakdown",
-            "netSharePurchaseActivity",
-            "price",
-            "quoteType",
-            "recommendationTrend",
-            "secFilings",
-            "sectorTrend",
-            "summaryDetail",
-            "summaryProfile",
-            "topHoldings",
-            "upgradeDowngradeHistory",
-          ],
-        },
-        { validateResult: false }
-      ) as Promise<QuoteSummaryResult>,
-      yf.fundamentalsTimeSeries(
-        symbol,
-        {
-          period1,
-          type: "quarterly",
-          module: "all",
-        },
-        { validateResult: false }
-      ) as Promise<FundamentalsTimeSeriesResult[]>,
-      yf.fundamentalsTimeSeries(
-        symbol,
-        {
-          period1,
-          type: "annual",
-          module: "all",
-        },
-        { validateResult: false }
-      ) as Promise<FundamentalsTimeSeriesResult[]>,
-      yf.fundamentalsTimeSeries(
-        symbol,
-        {
-          period1,
-          type: "trailing",
-          module: "all",
-        },
-        { validateResult: false }
-      ) as Promise<FundamentalsTimeSeriesResult[]>,
-      yf.insights(
-        symbol,
-        {
-          lang: "en-US",
-          reportsCount: 1000,
-          region: "US",
-        },
-        { validateResult: false }
-      ) as Promise<InsightsResult>,
-      yf.chart(
-        symbol,
-        {
-          period1: new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 5), // 5 years ago
-          period2: new Date(), // today
-          interval: "1d", // 1 day interval
-          return: "array",
-        },
-        { validateResult: false }
-      ) as Promise<ChartResultArray>,
-    ]);
+      // Get financial statements using fundamentalsTimeSeries (replaces the deprecated modules)
+      // Fetch data for the last 5 years
+      const period1 = new Date();
+      period1.setFullYear(period1.getFullYear() - 5);
 
-    return Response.json({
-      [symbol]: {
+      // Parallelize all API calls for better performance
+      const [
         quoteSummary,
+        allQuarterly,
+        allAnnual,
+        allTrailing,
         insights,
         chart,
-        fundamentalsTimeSeries: {
-          allQuarterly,
-          allAnnual,
-          allTrailing,
+      ] = await Promise.all([
+        yf.quoteSummary(
+          symbol,
+          {
+            modules: [
+              "assetProfile",
+              "calendarEvents",
+              "defaultKeyStatistics",
+              "earnings",
+              "earningsHistory",
+              "earningsTrend",
+              "financialData",
+              "fundOwnership",
+              "fundPerformance",
+              "fundProfile",
+              "indexTrend",
+              "industryTrend",
+              "insiderHolders",
+              "insiderTransactions",
+              "institutionOwnership",
+              "majorDirectHolders",
+              "majorHoldersBreakdown",
+              "netSharePurchaseActivity",
+              "price",
+              "quoteType",
+              "recommendationTrend",
+              "secFilings",
+              "sectorTrend",
+              "summaryDetail",
+              "summaryProfile",
+              "topHoldings",
+              "upgradeDowngradeHistory",
+            ],
+          },
+          { validateResult: false }
+        ) as Promise<QuoteSummaryResult>,
+        yf.fundamentalsTimeSeries(
+          symbol,
+          {
+            period1,
+            type: "quarterly",
+            module: "all",
+          },
+          { validateResult: false }
+        ) as Promise<FundamentalsTimeSeriesResult[]>,
+        yf.fundamentalsTimeSeries(
+          symbol,
+          {
+            period1,
+            type: "annual",
+            module: "all",
+          },
+          { validateResult: false }
+        ) as Promise<FundamentalsTimeSeriesResult[]>,
+        yf.fundamentalsTimeSeries(
+          symbol,
+          {
+            period1,
+            type: "trailing",
+            module: "all",
+          },
+          { validateResult: false }
+        ) as Promise<FundamentalsTimeSeriesResult[]>,
+        yf.insights(
+          symbol,
+          {
+            lang: "en-US",
+            reportsCount: 1000,
+            region: "US",
+          },
+          { validateResult: false }
+        ) as Promise<InsightsResult>,
+        yf.chart(
+          symbol,
+          {
+            period1: new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 * 5), // 5 years ago
+            period2: new Date(), // today
+            interval: "1d", // 1 day interval
+            return: "array",
+          },
+          { validateResult: false }
+        ) as Promise<ChartResultArray>,
+      ]);
+
+      return Response.json({
+        [symbol]: {
+          quoteSummary,
+          insights,
+          chart,
+          fundamentalsTimeSeries: {
+            allQuarterly,
+            allAnnual,
+            allTrailing,
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      console.error(`Error fetching data for symbol ${symbol}:`, error);
+
+      // Check if it's a 404 error (symbol not found)
+      if (
+        error instanceof Error &&
+        (error.message.includes("Not Found") ||
+          error.message.includes("No data found") ||
+          error.message.includes("404"))
+      ) {
+        return Response.json(
+          {
+            error: `Symbol ${symbol} not found`,
+            message: error instanceof Error ? error.message : "Unknown error",
+          },
+          { status: 404 }
+        );
+      }
+
+      // For other errors, return 500
+      return Response.json(
+        {
+          error: "Failed to fetch stock data",
+          message: error instanceof Error ? error.message : "Unknown error",
+          symbol,
+        },
+        { status: 500 }
+      );
+    }
   },
   responses: {
     200: {
@@ -176,6 +207,15 @@ export const { GET } = defineRoute({
       description: "Stock not found",
       content: z.object({
         error: z.string().describe("Error message"),
+        message: z.string().optional().describe("Detailed error message"),
+      }),
+    },
+    500: {
+      description: "Error fetching stock data",
+      content: z.object({
+        error: z.string().describe("Error type"),
+        message: z.string().optional().describe("Detailed error message"),
+        symbol: z.string().optional().describe("Stock symbol"),
       }),
     },
   },

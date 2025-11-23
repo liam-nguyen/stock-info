@@ -108,12 +108,11 @@ export const { POST } = defineRoute({
               }
             }
 
-            // Handle failed symbols from fetch
+            // Handle failed symbols from fetch - try scraper as fallback
             if (
               fetchData.failedToFetchSymbols &&
               fetchData.failedToFetchSymbols.length > 0
             ) {
-              // These will be added to _errors below
               // Remove successfully fetched symbols from missingSymbols
               for (const symbol of Object.keys(sourceResults)) {
                 const index = missingSymbols.indexOf(symbol);
@@ -121,11 +120,55 @@ export const { POST } = defineRoute({
                   missingSymbols.splice(index, 1);
                 }
               }
-              // Add failed fetch symbols back to missingSymbols if not already there
-              for (const failedSymbol of fetchData.failedToFetchSymbols) {
-                if (!missingSymbols.includes(failedSymbol)) {
-                  missingSymbols.push(failedSymbol);
+
+              // Try scraper for failed symbols
+              try {
+                const scraperResponse = await fetch(
+                  `${baseUrl}/api/stocks/scraper`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      symbols: fetchData.failedToFetchSymbols,
+                    }),
+                  }
+                );
+
+                if (scraperResponse.ok) {
+                  const scraperData = (await scraperResponse.json()) as {
+                    stocksData?: Array<Record<string, Record<string, unknown>>>;
+                    failedToFetchSymbols?: string[];
+                  };
+
+                  // Process scraper results
+                  if (scraperData.stocksData) {
+                    for (const stockDataObj of scraperData.stocksData) {
+                      if (stockDataObj && typeof stockDataObj === "object") {
+                        for (const [symbol, sources] of Object.entries(
+                          stockDataObj
+                        )) {
+                          // Add scraper data to results
+                          if (!results[symbol]) {
+                            results[symbol] = {};
+                          }
+                          // Merge scraper sources into results
+                          // sources is { fidelity: { price, source, queryTime }, ... }
+                          Object.assign(results[symbol], sources);
+
+                          // Remove from missingSymbols since we found data
+                          const index = missingSymbols.indexOf(symbol);
+                          if (index > -1) {
+                            missingSymbols.splice(index, 1);
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
+              } catch (scraperError) {
+                console.error("Error fetching from scraper:", scraperError);
               }
             } else {
               // All symbols were fetched successfully, clear missingSymbols

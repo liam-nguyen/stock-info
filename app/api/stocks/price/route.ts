@@ -222,23 +222,71 @@ export const { POST } = defineRoute({
               }
             }
 
-            // Handle failed symbols from fetch
+            // Handle failed symbols from fetch - try scraper as fallback
             if (
               fetchData.failedToFetchSymbols &&
               fetchData.failedToFetchSymbols.length > 0
             ) {
-              // Add failed fetch symbols to errors
-              for (const failedSymbol of fetchData.failedToFetchSymbols) {
-                if (missingSymbols.includes(failedSymbol)) {
-                  errors[failedSymbol] = {
-                    error: `No price data found for ${failedSymbol} in any source and failed to fetch from Yahoo Finance`,
+              // Try scraper for failed symbols
+              try {
+                const scraperResponse = await fetch(
+                  `${baseUrl}/api/stocks/scraper`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      symbols: fetchData.failedToFetchSymbols,
+                    }),
+                  }
+                );
+
+                if (scraperResponse.ok) {
+                  const scraperData = (await scraperResponse.json()) as {
+                    stocksData?: Array<Record<string, Record<string, unknown>>>;
+                    failedToFetchSymbols?: string[];
                   };
-                  // Remove from missingSymbols since we're handling it in errors
-                  const index = missingSymbols.indexOf(failedSymbol);
-                  if (index > -1) {
-                    missingSymbols.splice(index, 1);
+
+                  // Process scraper results
+                  if (scraperData.stocksData) {
+                    for (const stockDataObj of scraperData.stocksData) {
+                      if (stockDataObj && typeof stockDataObj === "object") {
+                        for (const [symbol, sources] of Object.entries(
+                          stockDataObj
+                        )) {
+                          // sources is { fidelity: { price, source, queryTime }, ... }
+                          // Get the first available price from any scraper source
+                          const firstSource = Object.values(sources)[0];
+                          if (
+                            firstSource &&
+                            typeof firstSource === "object" &&
+                            "price" in firstSource
+                          ) {
+                            const sourceData = firstSource as {
+                              price: number;
+                              source: string;
+                              queryTime: string;
+                            };
+                            results[symbol] = {
+                              price: sourceData.price,
+                              source: sourceData.source,
+                              queryTime: sourceData.queryTime,
+                            };
+
+                            // Remove from missingSymbols since we found the price
+                            const index = missingSymbols.indexOf(symbol);
+                            if (index > -1) {
+                              missingSymbols.splice(index, 1);
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
+              } catch (scraperError) {
+                console.error("Error fetching from scraper:", scraperError);
               }
             }
           } else {
