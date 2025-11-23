@@ -150,6 +150,18 @@ export async function refreshOldestStocks(
         ) {
           for (const failedSymbol of fetchData.failedToFetchSymbols) {
             result.processed++;
+
+            // For scraper source, this is expected if no cached data exists yet
+            // The scraper-refresh-worker will handle fresh scraping
+            if (source === "scraper") {
+              console.log(
+                `No cached data for ${failedSymbol} from ${source} (will be scraped fresh if configured)`
+              );
+              // Don't count as failed - scraper worker will handle it
+              continue;
+            }
+
+            // For other sources (like yf), this is a real failure
             result.failed++;
             const errorMessage = `Failed to fetch data for ${failedSymbol} from ${source}`;
             console.error(errorMessage);
