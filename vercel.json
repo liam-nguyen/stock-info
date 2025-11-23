@@ -1,5 +1,5 @@
 {
-  "installCommand": "rm -rf node_modules .next && pnpm install && pnpm add @sparticuz/chromium@^131.0.0",
+  "installCommand": "pnpm install --no-optional=false",
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 60,
