@@ -1,0 +1,4 @@
+# Force installation of optional dependencies in production
+# This ensures @sparticuz/chromium is installed on Vercel
+include=optional
+

@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm install --include=optional",
+  "installCommand": "cp .npmrc.production .npmrc && npm install",
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 60,
