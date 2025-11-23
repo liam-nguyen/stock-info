@@ -30,7 +30,7 @@ const ScraperStockSchema = new Schema(
     },
   },
   {
-    collection: "stock-cached-scrapped",
+    collection: "stock-cached-scraper",
     timestamps: false,
   }
 );
