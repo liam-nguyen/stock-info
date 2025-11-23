@@ -45,7 +45,7 @@
     "typescript": "^5.7.2"
   },
   "optionalDependencies": {
-    "@sparticuz/chromium": "^131.0.0"
+    "@sparticuz/chromium": "^126.0.0"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
