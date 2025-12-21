@@ -19,7 +19,7 @@
     "@omer-x/next-openapi-json-generator": "^2.0.2",
     "@omer-x/next-openapi-route-handler": "^2.0.0",
     "mongoose": "^8.19.4",
-    "next": "^16.0.0",
+    "next": "16.0.10",
     "puppeteer-core": "^23.11.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
