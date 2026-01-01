@@ -274,29 +274,32 @@ npm run validate
 
 ### Synology Deployment
 
-#### Initial Setup
+#### Initial Setup (Using Synology Docker GUI)
 
-1. **Create the data directory on Synology:**
+1. **Create a new Docker project in Synology:**
+   - Open **Docker** app in Synology DSM
+   - Go to **Container** → **Project** (or **Stack**)
+   - Click **Create** → **Create from docker-compose.yml**
+   - Set the **Project name**: `stock-api`
+   - Set the **Path**: `/volume1/docker/stock-api` (or your preferred path)
+   - Paste the contents of `docker-compose.yml` into the editor
+   - Update environment variables if needed (especially `REDIS_URL` and `FINNHUB_API_KEY`)
+   - Click **Create** to start the services
+
+**Note:** The `scrappedTickers.json` configuration file is included in the Docker image, so no manual copying is needed. If you want to update the config file without rebuilding the image, uncomment the `volumes` section in `docker-compose.yml` and copy the file to the mounted directory first.
+
+#### Alternative: Manual Setup (SSH)
+
+If you prefer using SSH:
+
+1. Create directory and copy docker-compose.yml:
 
    ```bash
-   mkdir -p /volume1/docker/stock-api/data
+   mkdir -p /volume1/docker/stock-api
+   # Copy docker-compose.yml to /volume1/docker/stock-api/
    ```
 
-2. **Copy the configuration file:**
-
-   ```bash
-   cp lib/data/scrappedTickers.json /volume1/docker/stock-api/data/
-   ```
-
-3. **Copy docker-compose.yml to Synology:**
-   - Upload `docker-compose.yml` to your Synology (e.g., to `/volume1/docker/stock-api/`)
-   - Update environment variables in `docker-compose.yml` if needed (especially `REDIS_URL` and `FINNHUB_API_KEY`)
-
-4. **Adjust volume path if needed:**
-   - If your Synology uses a different volume (e.g., `/volume2`, `/volumeUSB1`), update the volume path in `docker-compose.yml`
-   - The default path is: `/volume1/docker/stock-api/data:/app/lib/data`
-
-5. **Start the services:**
+2. Start services:
    ```bash
    cd /volume1/docker/stock-api
    docker-compose up -d

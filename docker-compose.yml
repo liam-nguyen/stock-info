@@ -11,10 +11,6 @@ services:
       - PORT=3000
       - REDIS_URL=redis.wiz-ai.cc:6379
       - FINNHUB_API_KEY=d5bfgshr01qnaidtauhgd5bfgshr01qnaidtaui0
-    volumes:
-      # Mount data directory for scrappedTickers.json configuration
-      # Adjust path if your Synology uses a different volume (e.g., /volume2, /volumeUSB1)
-      - /volume1/docker/stock-api/data:/app/lib/data
     restart: unless-stopped
 
   watchtower:
