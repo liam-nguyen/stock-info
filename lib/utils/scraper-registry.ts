@@ -9,18 +9,24 @@ type ScraperClassConstructor = new () => BaseScraper;
 /**
  * Registry mapping scraper names to their class constructors
  * Add new scrapers here as they are created
+ * Note: Use lowercase names to match the source property of scrapers
  */
 const scraperRegistry: Record<string, ScraperClassConstructor> = {
-  Fidelity: FidelityScraper,
+  fidelity: FidelityScraper,
 };
 
 /**
  * Get a scraper class by name
- * @param scraperName - Name of the scraper (e.g., "Fidelity")
+ * @param scraperName - Name of the scraper (e.g., "fidelity")
  * @returns The scraper class constructor, or null if not found
  */
 export function getScraperClass(
   scraperName: string
 ): ScraperClassConstructor | null {
-  return scraperRegistry[scraperName] || null;
+  // Try exact match first, then case-insensitive lookup
+  return (
+    scraperRegistry[scraperName] ||
+    scraperRegistry[scraperName.toLowerCase()] ||
+    null
+  );
 }

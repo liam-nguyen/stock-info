@@ -1,4 +1,5 @@
 import puppeteer, { Browser, Page } from "puppeteer-core";
+import fs from "fs";
 
 // Type-only import to satisfy TypeScript and build analysis
 // The actual module is imported dynamically at runtime
@@ -7,7 +8,12 @@ type ChromiumModule = typeof import("@sparticuz/chromium");
 // Helper to load chromium module - tries multiple methods
 async function loadChromium(): Promise<ChromiumModule | null> {
   // Skip loading in local development if PUPPETEER_EXECUTABLE_PATH is set
-  if (!isServerlessEnvironment() && process.env.PUPPETEER_EXECUTABLE_PATH) {
+  // But use it in Docker or serverless environments
+  if (
+    !isServerlessEnvironment() &&
+    !isDockerEnvironment() &&
+    process.env.PUPPETEER_EXECUTABLE_PATH
+  ) {
     console.log("Using local Chrome, skipping @sparticuz/chromium");
     return null;
   }
@@ -41,19 +47,48 @@ function isServerlessEnvironment(): boolean {
 }
 
 /**
- * Get Chromium configuration for serverless environments
+ * Check if running in Docker container
+ */
+function isDockerEnvironment(): boolean {
+  if (process.env.DOCKER_CONTAINER) {
+    return true;
+  }
+
+  try {
+    // Check for /.dockerenv file (Docker creates this)
+    if (fs.existsSync("/.dockerenv")) {
+      return true;
+    }
+
+    // Check /proc/self/cgroup for docker
+    if (fs.existsSync("/proc/self/cgroup")) {
+      const cgroup = fs.readFileSync("/proc/self/cgroup", "utf-8");
+      if (cgroup.includes("docker")) {
+        return true;
+      }
+    }
+  } catch {
+    // If we can't check, assume not Docker
+  }
+
+  return false;
+}
+
+/**
+ * Get Chromium configuration for serverless and Docker environments
  */
 async function getChromiumConfig(): Promise<{
   executablePath?: string;
   args: string[];
   headless: boolean;
 }> {
-  if (isServerlessEnvironment()) {
+  // Use @sparticuz/chromium in serverless or Docker environments
+  if (isServerlessEnvironment() || isDockerEnvironment()) {
     const chromium = await loadChromium();
     if (chromium) {
       try {
         // Use @sparticuz/chromium's configuration
-        // This package handles all the necessary setup for Vercel/Lambda
+        // This package handles all the necessary setup for Vercel/Lambda/Docker
         const executablePath = await chromium.executablePath();
         console.log("Using Chromium from @sparticuz/chromium:", executablePath);
 
@@ -112,10 +147,13 @@ export abstract class BaseScraper {
     if (!this.browser) {
       const config = await getChromiumConfig();
 
-      // In serverless environments, we must have an executablePath
-      if (isServerlessEnvironment() && !config.executablePath) {
+      // In serverless or Docker environments, we must have an executablePath
+      if (
+        (isServerlessEnvironment() || isDockerEnvironment()) &&
+        !config.executablePath
+      ) {
         throw new Error(
-          "Chromium executable path is required in serverless environment. " +
+          "Chromium executable path is required in serverless/Docker environment. " +
             "Make sure @sparticuz/chromium is installed and available."
         );
       }

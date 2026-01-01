@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  app:
+    # Image from Docker Hub (automatically built and pushed by GitHub Actions)
+    image: liamngdev/stock-api:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_URL=redis.wiz-ai.cc:6379
+      - FINNHUB_API_KEY=d5bfgshr01qnaidtauhgd5bfgshr01qnaidtaui0
+    volumes:
+      # Mount data directory for scrappedTickers.json configuration
+      # Adjust path if your Synology uses a different volume (e.g., /volume2, /volumeUSB1)
+      - /volume1/docker/stock-api/data:/app/lib/data
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 --cleanup
+    restart: always
+    environment:
+      - WATCHTOWER_INCLUDE_STOPPED=true

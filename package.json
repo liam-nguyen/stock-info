@@ -1,48 +1,37 @@
 {
-  "name": "next-js-scaffold",
+  "name": "stock-api",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "tsx watch server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
     "validate": "npm run type-check && npm run lint && npm run format:check",
-    "extract:types": "tsx scripts/extract-full-types.ts",
-    "generate:schemas": "npm run extract:types && tsx scripts/generate-yahoo-finance-schemas.ts",
     "prepare": "husky"
   },
   "dependencies": {
-    "@omer-x/next-openapi-json-generator": "^2.0.2",
-    "@omer-x/next-openapi-route-handler": "^2.0.0",
-    "mongoose": "^8.19.4",
-    "next": "^16.0.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
     "puppeteer-core": "^23.11.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "swagger-ui-react": "^5.30.2",
-    "yahoo-finance2": "^3.10.1",
-    "zod": "^4.1.12"
+    "redis": "^4.6.12"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^22.10.2",
-    "@types/react": "^19.0.6",
-    "@types/react-dom": "^19.0.2",
-    "@types/swagger-ui-react": "^5.18.0",
-    "autoprefixer": "^10.4.20",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
     "eslint": "^9.17.0",
-    "eslint-config-next": "^16.0.0",
+    "eslint-plugin-import": "^2.32.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.11",
-    "postcss": "^8.4.49",
     "prettier": "^3.4.2",
-    "tailwindcss": "^3.4.17",
-    "ts-to-zod": "^5.0.1",
     "tsx": "^4.20.6",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.51.0"
   },
   "optionalDependencies": {
     "@sparticuz/chromium": "^126.0.0"

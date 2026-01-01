@@ -1,10 +1,21 @@
-const nextConfig = require("eslint-config-next/core-web-vitals");
-const nextTypeScriptConfig = require("eslint-config-next/typescript");
+const tseslint = require("typescript-eslint");
+const eslintPluginImport = require("eslint-plugin-import");
 
 module.exports = [
-  ...nextConfig,
-  ...nextTypeScriptConfig,
+  ...tseslint.configs.recommended,
   {
+    files: ["**/*.ts", "**/*.tsx"],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        ecmaVersion: 2020,
+        sourceType: "module",
+        project: "./tsconfig.json",
+      },
+    },
+    plugins: {
+      import: eslintPluginImport,
+    },
     rules: {
       "prefer-const": "warn",
       "no-unused-vars": "off",
@@ -15,15 +26,27 @@ module.exports = [
           varsIgnorePattern: "^_",
         },
       ],
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/explicit-module-boundary-types": "off",
+    },
+  },
+  {
+    files: ["**/*.js", "**/*.jsx"],
+    languageOptions: {
+      ecmaVersion: 2020,
+      sourceType: "module",
+    },
+    rules: {
+      "prefer-const": "warn",
+      "no-unused-vars": "warn",
     },
   },
   {
     ignores: [
       "node_modules/**",
-      ".next/**",
-      "out/**",
-      "build/**",
       "dist/**",
+      "build/**",
+      ".next/**",
       "*.lock",
       "pnpm-lock.yaml",
       "package-lock.json",
@@ -31,14 +54,15 @@ module.exports = [
       ".DS_Store",
       "*.log",
       ".env*.local",
-      ".vercel/**",
-      ".turbo/**",
+      ".git/**",
+      ".husky/**",
     ],
   },
   {
-    files: ["eslint.config.cjs"],
+    files: ["eslint.config.cjs", "*.config.{js,cjs}"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-var-requires": "off",
     },
   },
 ];
