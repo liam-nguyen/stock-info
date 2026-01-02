@@ -9,7 +9,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - REDIS_URL=redis.wiz-ai.cc:6379
+      - REDIS_URL=redis.wiz-ai.cc:444
       - FINNHUB_API_KEY=d5bfgshr01qnaidtauhgd5bfgshr01qnaidtaui0
     restart: unless-stopped
 
