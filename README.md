@@ -1,4 +1,4 @@
-# Stock API
+# Stock API - Liam Nguyen
 
 A simple Node.js TypeScript API server for fetching stock data from multiple sources (Finnhub, Fidelity, etc.).
 
