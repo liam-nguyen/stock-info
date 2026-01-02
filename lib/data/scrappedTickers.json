@@ -1,3 +1,14 @@
 {
-  "NHFSMKX98": ["fidelity"]
+  "NHFSMKX98": {
+    "source": "fidelity",
+    "url": "https://fundresearch.fidelity.com/mutual-funds/summary/NHFSMKX98?appcode=529"
+  },
+  "VFIAX": {
+    "source": "fidelity",
+    "url": "https://fundresearch.fidelity.com/mutual-funds/summary/922908710"
+  },
+  "FXAIX": {
+    "source": "fidelity",
+    "url": "https://fundresearch.fidelity.com/mutual-funds/summary/315911750"
+  }
 }

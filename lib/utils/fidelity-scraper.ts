@@ -12,9 +12,13 @@ export class FidelityScraper extends BaseScraper {
   /**
    * Scrapes Fidelity mutual fund pages for stock prices
    * @param symbols - Array of stock symbols to scrape
+   * @param urlMap - Optional map of symbol to URL (from config)
    * @returns Array of scraper results
    */
-  async run(symbols: string[]): Promise<ScraperResult[]> {
+  async run(
+    symbols: string[],
+    urlMap?: Map<string, string>
+  ): Promise<ScraperResult[]> {
     if (!this.page) {
       throw new Error("Page not initialized");
     }
@@ -29,7 +33,12 @@ export class FidelityScraper extends BaseScraper {
     // Process symbols sequentially to avoid overwhelming the server
     for (const symbol of symbols) {
       try {
-        const url = `https://fundresearch.fidelity.com/mutual-funds/summary/${symbol}?appcode=529`;
+        // Use URL from config if provided, otherwise construct it
+        const url =
+          urlMap?.get(symbol.toUpperCase()) ||
+          `https://fundresearch.fidelity.com/mutual-funds/summary/${symbol}?appcode=529`;
+
+        console.log(`[FidelityScraper] Scraping ${symbol} from URL: ${url}`);
 
         // Navigate to the page and wait for the content to load
         await this.page.goto(url, {

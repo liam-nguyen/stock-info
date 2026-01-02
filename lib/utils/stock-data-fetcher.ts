@@ -4,10 +4,18 @@ import { getScraperClass } from "./scraper-registry";
 import { Finnhub } from "./finnhub";
 
 /**
- * Load ticker sources configuration
- * Format: { "TICKER": ["source1", "source2"], ... }
+ * Ticker configuration interface
  */
-function loadTickerSources(): Record<string, string[]> {
+interface TickerConfig {
+  source: string;
+  url: string;
+}
+
+/**
+ * Load ticker sources configuration
+ * Format: { "TICKER": { "source": "fidelity", "url": "..." }, ... }
+ */
+function loadTickerSources(): Record<string, TickerConfig> {
   try {
     // Try multiple paths to handle both development and production (Docker) environments
     const possiblePaths = [
@@ -19,7 +27,7 @@ function loadTickerSources(): Record<string, string[]> {
     for (const configPath of possiblePaths) {
       if (fs.existsSync(configPath)) {
         const configData = fs.readFileSync(configPath, "utf-8");
-        return JSON.parse(configData) as Record<string, string[]>;
+        return JSON.parse(configData) as Record<string, TickerConfig>;
       }
     }
 
@@ -39,15 +47,31 @@ function loadTickerSources(): Record<string, string[]> {
  */
 function getSourceForTicker(ticker: string): string {
   const config = loadTickerSources();
-  const sources = config[ticker.toUpperCase()];
+  const tickerConfig = config[ticker.toUpperCase()];
 
-  // If ticker is configured with sources, use the first one
-  if (sources && sources.length > 0) {
-    return sources[0];
+  // If ticker is configured, use the source from config
+  if (tickerConfig && tickerConfig.source) {
+    return tickerConfig.source;
   }
 
   // Default: use finnhub
   return "finnhub";
+}
+
+/**
+ * Get URL for a ticker if configured
+ * @param ticker - Stock ticker symbol
+ * @returns URL string or null if not configured
+ */
+function getUrlForTicker(ticker: string): string | null {
+  const config = loadTickerSources();
+  const tickerConfig = config[ticker.toUpperCase()];
+
+  if (tickerConfig && tickerConfig.url) {
+    return tickerConfig.url;
+  }
+
+  return null;
 }
 
 /**
@@ -92,13 +116,18 @@ async function fetchFromFinnhub(
  * Fetch stock data from scraper
  * @param ticker - Stock ticker symbol
  * @param scraperName - Name of the scraper (e.g., "Fidelity")
+ * @param url - Optional URL to use for scraping (from config)
  * @returns Data object with scraper source key
  */
 async function fetchFromScraper(
   ticker: string,
-  scraperName: string
+  scraperName: string,
+  url?: string | null
 ): Promise<Record<string, unknown> | null> {
   console.log(`[Scraper] Fetching ${ticker} from ${scraperName}...`);
+  if (url) {
+    console.log(`[Scraper] Using configured URL: ${url}`);
+  }
   const ScraperClass = getScraperClass(scraperName);
   if (!ScraperClass) {
     console.error(`[Scraper] Scraper "${scraperName}" not found in registry`);
@@ -107,7 +136,9 @@ async function fetchFromScraper(
 
   try {
     const scraper = new ScraperClass();
-    const results = await scraper.execute([ticker]);
+    // Create URL map if URL is provided
+    const urlMap = url ? new Map([[ticker.toUpperCase(), url]]) : undefined;
+    const results = await scraper.execute([ticker], urlMap);
 
     if (results.length === 0) {
       console.warn(
@@ -124,13 +155,13 @@ async function fetchFromScraper(
         source: result.source,
       }
     );
-    // Use the scraper's source property as the key (e.g., "fidelity")
+
+    // Normalize the result using the scraper's normalizeResult method
+    const normalizedData = scraper.normalizeResult(result);
+    console.log(`[Scraper] Normalized data for ${ticker}:`, normalizedData);
+
     return {
-      [result.source]: {
-        price: result.price,
-        source: result.source,
-        queryTime: result.queryTime,
-      },
+      [result.source]: normalizedData,
     };
   } catch (error) {
     console.error(
@@ -181,7 +212,8 @@ export async function fetchStockData(
       console.log(
         `[fetchStockData] Fetching ${ticker} from scraper ${source}...`
       );
-      const scraperData = await fetchFromScraper(ticker, source);
+      const url = getUrlForTicker(ticker);
+      const scraperData = await fetchFromScraper(ticker, source, url);
       if (scraperData) {
         // Extract the actual data from scraper key
         data = scraperData[source] as Record<string, unknown>;

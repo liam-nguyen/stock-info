@@ -35,6 +35,23 @@ export interface ScraperResult {
 }
 
 /**
+ * Normalized stock data format that matches GraphQL schema
+ * This is what gets cached and returned to the resolver
+ */
+export interface NormalizedStockData {
+  price?: number;
+  currentPrice?: number;
+  change?: number;
+  percentChange?: number;
+  highPrice?: number;
+  lowPrice?: number;
+  openPrice?: number;
+  previousClose?: number;
+  timestamp?: number;
+  queryTime?: string;
+}
+
+/**
  * Check if running in AWS Lambda or similar serverless environment
  */
 function isServerlessEnvironment(): boolean {
@@ -187,19 +204,42 @@ export abstract class BaseScraper {
    * Abstract method that child classes must implement
    * Should return scraper results for the given symbols
    * @param symbols - Array of stock symbols to scrape
+   * @param urlMap - Optional map of symbol to URL (from config)
    * @returns Array of scraper results
    */
-  abstract run(symbols: string[]): Promise<ScraperResult[]>;
+  abstract run(
+    symbols: string[],
+    urlMap?: Map<string, string>
+  ): Promise<ScraperResult[]>;
+
+  /**
+   * Transform scraper result to normalized format for GraphQL
+   * Override this method in child classes if custom transformation is needed
+   * @param result - Scraper result
+   * @returns Normalized stock data
+   */
+  normalizeResult(result: ScraperResult): NormalizedStockData {
+    return {
+      price: result.price,
+      currentPrice: result.price, // Map price to currentPrice for GraphQL schema
+      // Scrapers typically don't have change/percentChange, so leave them undefined
+      queryTime: result.queryTime.toISOString(),
+    };
+  }
 
   /**
    * Execute the scraper with browser lifecycle management
    * @param symbols - Array of stock symbols to scrape
+   * @param urlMap - Optional map of symbol to URL (from config)
    * @returns Array of scraper results
    */
-  async execute(symbols: string[]): Promise<ScraperResult[]> {
+  async execute(
+    symbols: string[],
+    urlMap?: Map<string, string>
+  ): Promise<ScraperResult[]> {
     try {
       await this.initBrowser();
-      return await this.run(symbols);
+      return await this.run(symbols, urlMap);
     } catch (error) {
       console.error(`Error in scraper ${this.source}:`, error);
       throw error;
