@@ -4,9 +4,11 @@ A simple Node.js TypeScript API server for fetching stock data from multiple sou
 
 ## Features
 
+- **GraphQL API** for flexible queries
 - **Node.js** with Express
 - **TypeScript** with strict mode
-- **Redis** caching (5-minute TTL)
+- **Redis** caching with smart refresh strategy
+- **Background worker** for automatic cache refresh (respects rate limits)
 - **Docker** support with docker-compose
 - **Multiple data sources**: Finnhub API and web scrapers (Fidelity)
 - **Automatic source routing**: Routes to appropriate source based on ticker configuration
@@ -43,6 +45,12 @@ REDIS_PORT=6379
 
 # Finnhub API Configuration
 FINNHUB_API_KEY=your_finnhub_api_key_here
+
+# Cache Refresh Configuration (optional)
+CACHE_STALE_THRESHOLD_SECONDS=300  # When to consider cache stale (default: 300 = 5 min)
+REFRESH_WORKER_INTERVAL_MS=2000    # Worker processing interval (default: 2000 = 2 sec)
+BACKOFF_INITIAL_SECONDS=2          # Initial backoff on rate limit error (default: 2)
+BACKOFF_MAX_SECONDS=60             # Maximum backoff time (default: 60)
 ```
 
 3. Run the development server:
@@ -74,7 +82,9 @@ This will:
 2. Access the API:
 
 ```bash
-curl http://localhost:3000/stocks?tickers=AAPL,MSFT
+curl -X POST http://localhost:3000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ stocks(tickers: [\"AAPL\", \"MSFT\"]) { ticker price currentPrice change metadata { fetchedAt source } } }"}'
 ```
 
 **Note:** This setup uses a remote Redis service. Make sure `REDIS_URL` is configured in your environment variables.
@@ -91,59 +101,85 @@ docker-compose -f docker-compose.dev.yml up --build
 
 ## API Endpoints
 
-### GET /health
+### POST /graphql
 
-Health check endpoint.
+GraphQL endpoint for querying stock data.
 
-**Response:**
+**Query a single stock:**
 
-```json
-{
-  "status": "ok"
-}
-```
-
-### GET /stocks
-
-Get stock data for one or more tickers.
-
-**Query Parameters:**
-
-- `tickers` (required): Comma-separated list of ticker symbols (e.g., `AAPL,MSFT,NHFSMKX98`)
-
-**Response:**
-
-```json
-{
-  "success": {
-    "AAPL": {
-      "finnhub": {
-        "currentPrice": 150.25,
-        "change": 2.5,
-        "percentChange": 1.69,
-        "highPrice": 151.0,
-        "lowPrice": 149.5,
-        "openPrice": 149.75,
-        "previousClose": 147.75,
-        "timestamp": 1704067200
-      }
-    },
-    "NHFSMKX98": {
-      "fidelity": {
-        "price": 123.45,
-        "source": "fidelity",
-        "queryTime": "2024-01-01T00:00:00Z"
-      }
+```graphql
+query {
+  stock(ticker: "AAPL") {
+    ticker
+    currentPrice
+    change
+    percentChange
+    highPrice
+    lowPrice
+    openPrice
+    previousClose
+    metadata {
+      fetchedAt
+      source
     }
-  },
-  "failed": []
+  }
 }
 ```
 
-**Example:**
+**Query multiple stocks:**
+
+```graphql
+query {
+  stocks(tickers: ["AAPL", "MSFT", "NHFSMKX98"]) {
+    ticker
+    price
+    currentPrice
+    change
+    metadata {
+      fetchedAt
+      source
+    }
+  }
+}
+```
+
+**Example using curl:**
 
 ```bash
-curl "http://localhost:3000/stocks?tickers=AAPL,MSFT,NHFSMKX98"
+curl -X POST http://localhost:3000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "{ stocks(tickers: [\"AAPL\", \"MSFT\"]) { ticker currentPrice change metadata { fetchedAt source } } }"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "data": {
+    "stocks": [
+      {
+        "ticker": "AAPL",
+        "currentPrice": 150.25,
+        "change": 2.5,
+        "metadata": {
+          "fetchedAt": 1704067200,
+          "source": "finnhub"
+        }
+      },
+      {
+        "ticker": "MSFT",
+        "currentPrice": 380.5,
+        "change": 5.25,
+        "metadata": {
+          "fetchedAt": 1704067200,
+          "source": "finnhub"
+        }
+      }
+    ]
+  }
+}
 ```
 
 ## Available Scripts
@@ -170,20 +206,25 @@ The API supports multiple data sources:
 2. **Fidelity Scraper** (`fidelity`): For tickers configured in `scrappedTickers.json`
    - Web scraping for mutual funds and other instruments not available on Finnhub
 
-### Caching
+### Caching and Refresh Strategy
 
 - **Redis** is used for caching with a 5-minute TTL
-- Cache key format: `stock-api:{TICKER}:{SOURCE}` (e.g., `stock-api:AAPL:finnhub`)
-- Each source is cached separately for better cache management
+- Cache key format: `stock-api:{TICKER}` (e.g., `stock-api:AAPL`)
+- **Smart Refresh**: Background worker automatically refreshes stale data
+- **Priority Queue**: Most stale data is refreshed first
+- **Rate Limiting**: Worker processes 1 ticker per 2 seconds (30/min, well under Finnhub's 60/min limit)
+- **Exponential Backoff**: On rate limit errors, automatically backs off (2s, 4s, 8s, 16s, max 60s)
+- **Non-blocking**: Users always get immediate response (cached data, even if stale)
+- **Timestamp Tracking**: All cached data includes `fetchedAt` timestamp for display to users
 
 ### Source Routing
 
-The API automatically routes to the appropriate source:
+The API automatically routes to the appropriate source (single source per ticker):
 
 - Checks `lib/data/scrappedTickers.json` to determine if a ticker should use a scraper
 - If found in scrapped tickers, uses the configured scraper (e.g., Fidelity)
 - Otherwise, uses Finnhub API
-- All sources are tried in parallel, and successful results are merged
+- **Single source per ticker** - no mixing of sources
 
 ## Configuration
 
@@ -193,9 +234,12 @@ Configure which tickers use scrapers in `lib/data/scrappedTickers.json`:
 
 ```json
 {
-  "Fidelity": ["NHFSMKX98", "ANOTHER_TICKER"]
+  "NHFSMKX98": ["fidelity"],
+  "ANOTHER_TICKER": ["fidelity"]
 }
 ```
+
+The key is the ticker symbol, and the value is an array of source names (typically just one source).
 
 The key is the scraper name (must match a scraper in the registry), and the value is an array of ticker symbols.
 
@@ -247,13 +291,17 @@ npm run validate
 
 ## Environment Variables
 
-| Variable          | Description                                | Default     |
-| ----------------- | ------------------------------------------ | ----------- |
-| `PORT`            | Server port                                | `3000`      |
-| `REDIS_HOST`      | Redis host                                 | `localhost` |
-| `REDIS_PORT`      | Redis port                                 | `6379`      |
-| `REDIS_URL`       | Redis connection URL (overrides host/port) | -           |
-| `FINNHUB_API_KEY` | Finnhub API key (required)                 | -           |
+| Variable                        | Description                                | Default        |
+| ------------------------------- | ------------------------------------------ | -------------- |
+| `PORT`                          | Server port                                | `3000`         |
+| `REDIS_HOST`                    | Redis host                                 | `localhost`    |
+| `REDIS_PORT`                    | Redis port                                 | `6379`         |
+| `REDIS_URL`                     | Redis connection URL (overrides host/port) | -              |
+| `FINNHUB_API_KEY`               | Finnhub API key (required)                 | -              |
+| `CACHE_STALE_THRESHOLD_SECONDS` | When to consider cache stale               | `300` (5 min)  |
+| `REFRESH_WORKER_INTERVAL_MS`    | Worker processing interval                 | `2000` (2 sec) |
+| `BACKOFF_INITIAL_SECONDS`       | Initial backoff on rate limit error        | `2`            |
+| `BACKOFF_MAX_SECONDS`           | Maximum backoff time                       | `60`           |
 
 ## Development
 

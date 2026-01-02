@@ -1,18 +1,22 @@
 import "dotenv/config";
 import express from "express";
-import healthRoutes from "./routes/health";
-import stocksRoutes from "./routes/stocks";
+import cors from "cors";
+import graphqlRoutes from "./routes/graphql";
 import { checkRedisHealth } from "./lib/db/redis";
+import {
+  startRefreshWorker,
+  stopRefreshWorker,
+} from "./lib/workers/cache-refresh-worker";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+app.use(cors()); // Enable CORS for all routes
 app.use(express.json());
 
 // Routes
-app.use("/health", healthRoutes);
-app.use("/stocks", stocksRoutes);
+app.use("/", graphqlRoutes);
 
 // Error handling middleware
 app.use(
@@ -44,6 +48,8 @@ app.listen(PORT, async () => {
     const isHealthy = await checkRedisHealth();
     if (isHealthy) {
       console.log("✓ Redis connection is healthy");
+      // Start background refresh worker
+      startRefreshWorker();
     } else {
       console.warn("⚠ Redis connection check failed - caching will not work");
     }
@@ -54,16 +60,13 @@ app.listen(PORT, async () => {
 });
 
 // Graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log("SIGTERM received, shutting down gracefully");
+async function shutdown() {
+  console.log("Shutting down gracefully...");
+  stopRefreshWorker();
   const { closeRedisConnection } = await import("./lib/db/redis");
   await closeRedisConnection();
   process.exit(0);
-});
+}
 
-process.on("SIGINT", async () => {
-  console.log("SIGINT received, shutting down gracefully");
-  const { closeRedisConnection } = await import("./lib/db/redis");
-  await closeRedisConnection();
-  process.exit(0);
-});
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
