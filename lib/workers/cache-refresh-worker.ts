@@ -3,6 +3,7 @@ import {
   removeFromRefreshQueue,
   isCacheStale,
   setCachedStock,
+  getCachedStock,
 } from "../db/redis";
 import { fetchStockData } from "../utils/stock-data-fetcher";
 import {
@@ -12,11 +13,7 @@ import {
   waitForBackoff,
   clearBackoff,
 } from "../utils/rate-limiter";
-
-const WORKER_INTERVAL_MS = parseInt(
-  process.env.REFRESH_WORKER_INTERVAL_MS || "2000",
-  10
-);
+import { WORKER_INTERVAL_MS } from "../../constants";
 
 let isRunning = false;
 let workerInterval: NodeJS.Timeout | null = null;
@@ -34,8 +31,13 @@ async function processRefreshQueue(): Promise<void> {
       return;
     }
 
+    // Get cached data to check dataType
+    const cachedData = await getCachedStock(ticker);
+    const metadata = cachedData?._metadata as { dataType?: string } | undefined;
+    const dataType = metadata?.dataType;
+
     // Check if ticker is still stale (might have been refreshed by another request)
-    const stale = await isCacheStale(ticker);
+    const stale = await isCacheStale(ticker, dataType);
     if (!stale) {
       // Cache is fresh, remove from queue
       await removeFromRefreshQueue(ticker);
@@ -55,11 +57,16 @@ async function processRefreshQueue(): Promise<void> {
       const result = await fetchStockData(ticker);
 
       if (result) {
-        // Cache the fresh data
-        await setCachedStock(ticker, result.data, result.source);
+        // Cache the fresh data with dataType
+        await setCachedStock(
+          ticker,
+          result.data,
+          result.source,
+          result.dataType
+        );
         clearBackoff(ticker); // Clear backoff on success
         console.log(
-          `Successfully refreshed cache for ${ticker} from ${result.source}`
+          `Successfully refreshed cache for ${ticker} from ${result.source} (dataType: ${result.dataType})`
         );
       } else {
         console.warn(`Failed to fetch data for ${ticker}, will retry later`);

@@ -1,4 +1,11 @@
 import { createClient } from "redis";
+import {
+  SCRAPPED_CACHE_TTL_SECONDS,
+  FINNHUB_CACHE_TTL_SECONDS,
+  REFRESH_QUEUE_KEY,
+  SCRAPPED_STALE_THRESHOLD_SECONDS,
+  FINNHUB_STALE_THRESHOLD_SECONDS,
+} from "../../constants";
 
 const REDIS_HOST = process.env.REDIS_HOST || "localhost";
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379", 10);
@@ -12,13 +19,6 @@ if (REDIS_URL) {
 } else {
   console.log(`Redis Host/Port configured: ${REDIS_HOST}:${REDIS_PORT}`);
 }
-
-const CACHE_TTL_SECONDS = 300; // 5 minutes
-const REFRESH_QUEUE_KEY = "stock-api:refresh-queue";
-const CACHE_STALE_THRESHOLD_SECONDS = parseInt(
-  process.env.CACHE_STALE_THRESHOLD_SECONDS || "300",
-  10
-);
 
 let redisClient: ReturnType<typeof createClient> | null = null;
 let redisConnectionStatus: "connected" | "disconnected" | "error" =
@@ -169,14 +169,25 @@ export async function getCacheAge(ticker: string): Promise<number | null> {
 /**
  * Check if cache is stale
  * @param ticker - Stock ticker symbol
+ * @param dataType - Optional dataType ("scrapped" or "finnhub") to use appropriate threshold
  * @returns true if cache is stale or doesn't exist, false otherwise
  */
-export async function isCacheStale(ticker: string): Promise<boolean> {
+export async function isCacheStale(
+  ticker: string,
+  dataType?: string
+): Promise<boolean> {
   const age = await getCacheAge(ticker);
   if (age === null) {
     return true; // Not cached = stale
   }
-  return age >= CACHE_STALE_THRESHOLD_SECONDS;
+
+  // Use dataType-specific threshold if provided, otherwise default to finnhub
+  const threshold =
+    dataType === "scrapped"
+      ? SCRAPPED_STALE_THRESHOLD_SECONDS
+      : FINNHUB_STALE_THRESHOLD_SECONDS;
+
+  return age >= threshold;
 }
 
 /**
@@ -184,26 +195,35 @@ export async function isCacheStale(ticker: string): Promise<boolean> {
  * @param ticker - Stock ticker symbol
  * @param data - Data object from source (e.g., { price: 150.25, change: 2.5, ... })
  * @param source - Source name (e.g., "finnhub", "fidelity")
+ * @param dataType - Optional dataType ("scrapped" or "finnhub") to use appropriate TTL
  */
 export async function setCachedStock(
   ticker: string,
   data: Record<string, unknown>,
-  source: string
+  source: string,
+  dataType?: string
 ): Promise<void> {
   try {
     const client = await getRedisClient();
     const key = `stock-api:${ticker.toUpperCase()}`;
 
-    // Add metadata with timestamp
+    // Use dataType-specific TTL if provided, otherwise default to finnhub
+    const ttl =
+      dataType === "scrapped"
+        ? SCRAPPED_CACHE_TTL_SECONDS
+        : FINNHUB_CACHE_TTL_SECONDS;
+
+    // Add metadata with timestamp and dataType
     const cachedData = {
       ...data,
       _metadata: {
         fetchedAt: Math.floor(Date.now() / 1000),
         source: source,
+        dataType: dataType || "finnhub",
       },
     };
 
-    await client.setEx(key, CACHE_TTL_SECONDS, JSON.stringify(cachedData));
+    await client.setEx(key, ttl, JSON.stringify(cachedData));
 
     // Remove from refresh queue since we just updated it
     await client.zRem(REFRESH_QUEUE_KEY, ticker.toUpperCase());

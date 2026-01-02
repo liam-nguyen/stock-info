@@ -4,18 +4,11 @@
  * Implements exponential backoff on rate limit errors
  */
 
-const CALL_INTERVAL_MS = parseInt(
-  process.env.REFRESH_WORKER_INTERVAL_MS || "2000",
-  10
-);
-const BACKOFF_INITIAL_SECONDS = parseInt(
-  process.env.BACKOFF_INITIAL_SECONDS || "2",
-  10
-);
-const BACKOFF_MAX_SECONDS = parseInt(
-  process.env.BACKOFF_MAX_SECONDS || "60",
-  10
-);
+import {
+  CALL_INTERVAL_MS,
+  BACKOFF_INITIAL_SECONDS,
+  BACKOFF_MAX_SECONDS,
+} from "../../constants";
 
 let lastCallTime = 0;
 const backoffState = new Map<

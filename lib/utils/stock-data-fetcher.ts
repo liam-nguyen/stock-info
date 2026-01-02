@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getScraperClass } from "./scraper-registry";
+import { getScraperClass } from "../scrapping/scraper-registry";
 import { Finnhub } from "./finnhub";
 
 /**
@@ -9,6 +9,7 @@ import { Finnhub } from "./finnhub";
 interface TickerConfig {
   source: string;
   url: string;
+  dataType?: string;
 }
 
 /**
@@ -19,9 +20,21 @@ function loadTickerSources(): Record<string, TickerConfig> {
   try {
     // Try multiple paths to handle both development and production (Docker) environments
     const possiblePaths = [
-      path.join(process.cwd(), "lib", "data", "scrappedTickers.json"),
-      path.join(__dirname, "..", "data", "scrappedTickers.json"),
-      path.join(process.cwd(), "lib", "data", "scrappedTickers.json"),
+      path.join(
+        process.cwd(),
+        "lib",
+        "scrapping",
+        "data",
+        "scrappedTickers.json"
+      ),
+      path.join(__dirname, "..", "scrapping", "data", "scrappedTickers.json"),
+      path.join(
+        process.cwd(),
+        "lib",
+        "scrapping",
+        "data",
+        "scrappedTickers.json"
+      ),
     ];
 
     for (const configPath of possiblePaths) {
@@ -72,6 +85,23 @@ function getUrlForTicker(ticker: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Get dataType for a ticker
+ * @param ticker - Stock ticker symbol
+ * @returns "scrapped" if ticker is in config, otherwise "finnhub"
+ */
+function getDataTypeForTicker(ticker: string): string {
+  const config = loadTickerSources();
+  const tickerConfig = config[ticker.toUpperCase()];
+
+  if (tickerConfig && tickerConfig.dataType) {
+    return tickerConfig.dataType;
+  }
+
+  // Default: finnhub
+  return "finnhub";
 }
 
 /**
@@ -185,10 +215,17 @@ async function fetchFromScraper(
  */
 export async function fetchStockData(
   ticker: string
-): Promise<{ data: Record<string, unknown>; source: string } | null> {
+): Promise<{
+  data: Record<string, unknown>;
+  source: string;
+  dataType: string;
+} | null> {
   // Get single source for this ticker
   const source = getSourceForTicker(ticker);
-  console.log(`[fetchStockData] Using source "${source}" for ticker ${ticker}`);
+  const dataType = getDataTypeForTicker(ticker);
+  console.log(
+    `[fetchStockData] Using source "${source}" and dataType "${dataType}" for ticker ${ticker}`
+  );
 
   try {
     let data: Record<string, unknown> | null = null;
@@ -243,7 +280,7 @@ export async function fetchStockData(
     console.log(
       `[fetchStockData] Successfully fetched ${ticker} from ${source} with ${Object.keys(data).length} fields`
     );
-    return { data, source };
+    return { data, source, dataType };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;

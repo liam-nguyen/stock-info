@@ -40,10 +40,6 @@ const StockType = new GraphQLObjectType({
       type: GraphQLFloat,
       description: "Current price",
     },
-    currentPrice: {
-      type: GraphQLFloat,
-      description: "Current price (Finnhub field name)",
-    },
     change: {
       type: GraphQLFloat,
       description: "Price change",

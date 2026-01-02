@@ -18,11 +18,17 @@ async function resolveStock(ticker: string) {
 
   if (cachedData) {
     console.log(`[Resolver] Cache hit for ${upperTicker}`);
+    // Extract dataType from metadata for stale check
+    const metadata = cachedData._metadata as
+      | { fetchedAt: number; source: string; dataType?: string }
+      | undefined;
+    const dataType = metadata?.dataType;
+
     // If cached but stale, queue for refresh (non-blocking)
-    const stale = await isCacheStale(upperTicker);
+    const stale = await isCacheStale(upperTicker, dataType);
     if (stale) {
       console.log(
-        `[Resolver] Cache is stale for ${upperTicker}, queueing refresh`
+        `[Resolver] Cache is stale for ${upperTicker} (dataType: ${dataType}), queueing refresh`
       );
       queueRefresh(upperTicker).catch((error) => {
         console.error(
@@ -40,9 +46,14 @@ async function resolveStock(ticker: string) {
       const result = await fetchStockData(upperTicker);
       if (result) {
         console.log(
-          `[Resolver] Successfully fetched ${upperTicker} from ${result.source}, caching...`
+          `[Resolver] Successfully fetched ${upperTicker} from ${result.source} (dataType: ${result.dataType}), caching...`
         );
-        await setCachedStock(upperTicker, result.data, result.source);
+        await setCachedStock(
+          upperTicker,
+          result.data,
+          result.source,
+          result.dataType
+        );
         cachedData = await getCachedStock(upperTicker);
         if (!cachedData) {
           console.error(
@@ -78,7 +89,7 @@ async function resolveStock(ticker: string) {
 
   // Extract metadata
   const metadata = cachedData._metadata as
-    | { fetchedAt: number; source: string }
+    | { fetchedAt: number; source: string; dataType?: string }
     | undefined;
 
   if (!metadata) {
@@ -89,6 +100,14 @@ async function resolveStock(ticker: string) {
 
   const data = { ...cachedData };
   delete data._metadata;
+
+  // Normalize data format: map Finnhub's currentPrice to price
+  if (data.currentPrice !== undefined && data.price === undefined) {
+    data.price = data.currentPrice as number;
+    console.log(
+      `[Resolver] Mapped currentPrice to price for ${upperTicker} (Finnhub data)`
+    );
+  }
 
   console.log(
     `[Resolver] Successfully resolved ${upperTicker} with ${Object.keys(data).length} fields`

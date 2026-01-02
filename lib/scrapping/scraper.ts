@@ -273,7 +273,6 @@ export abstract class BaseScraper {
   normalizeResult(result: ScraperResult): NormalizedStockData {
     return {
       price: result.price,
-      currentPrice: result.price, // Map price to currentPrice for GraphQL schema
       // Scrapers typically don't have change/percentChange, so leave them undefined
       queryTime: result.queryTime.toISOString(),
     };
