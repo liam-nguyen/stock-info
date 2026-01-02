@@ -99,19 +99,76 @@ async function getChromiumConfig(): Promise<{
   args: string[];
   headless: boolean;
 }> {
-  // Use @sparticuz/chromium in serverless or Docker environments
-  if (isServerlessEnvironment() || isDockerEnvironment()) {
+  // In Docker, prefer system Chromium (installed via apk)
+  if (isDockerEnvironment()) {
+    // Check for system Chromium first (Alpine Linux)
+    const systemChromiumPaths = [
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chromium",
+      "/usr/bin/chrome",
+    ];
+
+    for (const chromiumPath of systemChromiumPaths) {
+      if (fs.existsSync(chromiumPath)) {
+        console.log(`Using system Chromium in Docker: ${chromiumPath}`);
+        return {
+          executablePath: chromiumPath,
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-zygote",
+            "--single-process",
+            "--disable-software-rasterizer",
+            "--disable-extensions",
+          ],
+          headless: true,
+        };
+      }
+    }
+
+    // Fallback to @sparticuz/chromium if system Chromium not found
+    console.log("System Chromium not found, trying @sparticuz/chromium...");
     const chromium = await loadChromium();
     if (chromium) {
       try {
-        // Use @sparticuz/chromium's configuration
-        // This package handles all the necessary setup for Vercel/Lambda/Docker
         const executablePath = await chromium.executablePath();
         console.log("Using Chromium from @sparticuz/chromium:", executablePath);
 
+        if (fs.existsSync(executablePath)) {
+          return {
+            executablePath,
+            args: chromium.args,
+            headless: chromium.headless,
+          };
+        } else {
+          console.error(
+            `@sparticuz/chromium executable not found at: ${executablePath}`
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load @sparticuz/chromium:", error);
+      }
+    }
+
+    throw new Error(
+      "No Chromium executable found in Docker. " +
+        "Make sure Chromium is installed via 'apk add chromium' in Dockerfile."
+    );
+  }
+
+  // Use @sparticuz/chromium in serverless environments
+  if (isServerlessEnvironment()) {
+    const chromium = await loadChromium();
+    if (chromium) {
+      try {
+        const executablePath = await chromium.executablePath();
+        console.log("Using Chromium from @sparticuz/chromium:", executablePath);
         return {
           executablePath,
-          args: chromium.args, // Use chromium's args directly - they include all necessary flags
+          args: chromium.args,
           headless: chromium.headless,
         };
       } catch (error) {
@@ -120,11 +177,6 @@ async function getChromiumConfig(): Promise<{
           error
         );
       }
-    } else {
-      console.warn(
-        "@sparticuz/chromium package not found. " +
-          "Make sure it's installed: npm install @sparticuz/chromium"
-      );
     }
   }
 

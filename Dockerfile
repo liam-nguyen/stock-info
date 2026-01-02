@@ -5,6 +5,17 @@ WORKDIR /app
 # Set Docker environment variable for detection
 ENV DOCKER_CONTAINER=true
 
+# Install Chromium dependencies for Alpine Linux
+# @sparticuz/chromium needs these system libraries to run
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
 # Copy package files
 COPY package*.json ./
 
