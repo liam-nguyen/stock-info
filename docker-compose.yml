@@ -11,6 +11,7 @@ services:
       - PORT=3000
       - REDIS_URL=redis.wiz-ai.cc:444
       - FINNHUB_API_KEY=d5bfgshr01qnaidtauhgd5bfgshr01qnaidtaui0
+      - ALPHA_VANTAGE_API_KEY=O1PBCD2XM14CW05L
     restart: unless-stopped
 
   watchtower:

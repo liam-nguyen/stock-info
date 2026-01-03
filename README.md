@@ -10,8 +10,9 @@ A simple Node.js TypeScript API server for fetching stock data from multiple sou
 - **Redis** caching with smart refresh strategy
 - **Background worker** for automatic cache refresh (respects rate limits)
 - **Docker** support with docker-compose
-- **Multiple data sources**: Finnhub API and web scrapers (Fidelity)
-- **Automatic source routing**: Routes to appropriate source based on ticker configuration
+- **Multiple data sources**: Finnhub API and Alpha Vantage API
+- **Automatic source routing**: Routes to appropriate source based on ticker mapping
+- **Market hours-aware caching**: Cache TTL extends until market opens when closed (including weekends)
 
 ## Getting Started
 
@@ -43,8 +44,9 @@ REDIS_PORT=6379
 # OR use Redis URL
 # REDIS_URL=redis://localhost:6379
 
-# Finnhub API Configuration
+# API Keys
 FINNHUB_API_KEY=your_finnhub_api_key_here
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_api_key_here
 
 # Cache Refresh Configuration (optional)
 CACHE_STALE_THRESHOLD_SECONDS=300  # When to consider cache stale (default: 300 = 5 min)
@@ -202,46 +204,54 @@ The API supports multiple data sources:
 1. **Finnhub API** (`finnhub`): Default source for most tickers
    - Provides real-time quote data including current price, change, high/low, open, and previous close
    - Uses official Finnhub API with API key authentication
+   - Cache TTL: 5 minutes during market hours
 
-2. **Fidelity Scraper** (`fidelity`): For tickers configured in `scrappedTickers.json`
-   - Web scraping for mutual funds and other instruments not available on Finnhub
+2. **Alpha Vantage API** (`alpha-vantage`): For specific tickers (FXAIX, VFIAX)
+   - Provides real-time quote data via GLOBAL_QUOTE endpoint
+   - Limited to 20 requests per day (shared between tickers)
+   - Cache TTL: ~39 minutes during market hours (10 requests per ticker per day)
+
+3. **Calculated Tickers**: NHFSMKX98 is calculated from FXAIX price (FXAIX price / 3.43)
 
 ### Caching and Refresh Strategy
 
-- **Redis** is used for caching with a 5-minute TTL
+- **Redis** is used for caching with source-specific TTLs
 - Cache key format: `stock-api:{TICKER}` (e.g., `stock-api:AAPL`)
-- **Smart Refresh**: Background worker automatically refreshes stale data
+- **Market Hours-Aware**: Cache TTL extends until market opens when closed (including weekends)
+- **Smart Refresh**: Background worker automatically refreshes stale data during market hours only
 - **Priority Queue**: Most stale data is refreshed first
-- **Rate Limiting**: Worker processes 1 ticker per 2 seconds (30/min, well under Finnhub's 60/min limit)
+- **Rate Limiting**:
+  - Finnhub: 1 ticker per 2 seconds (30/min, well under 60/min limit)
+  - Alpha Vantage: ~39 minutes between refreshes per ticker (during market hours)
 - **Exponential Backoff**: On rate limit errors, automatically backs off (2s, 4s, 8s, 16s, max 60s)
 - **Non-blocking**: Users always get immediate response (cached data, even if stale)
 - **Timestamp Tracking**: All cached data includes `fetchedAt` timestamp for display to users
 
 ### Source Routing
 
-The API automatically routes to the appropriate source (single source per ticker):
+The API automatically routes to the appropriate source based on ticker mapping:
 
-- Checks `lib/data/scrappedTickers.json` to determine if a ticker should use a scraper
-- If found in scrapped tickers, uses the configured scraper (e.g., Fidelity)
-- Otherwise, uses Finnhub API
+- Ticker source mapping is defined in `lib/utils/ticker-source-map.ts`
+- FXAIX and VFIAX are mapped to Alpha Vantage
+- All other tickers default to Finnhub
 - **Single source per ticker** - no mixing of sources
+- Easy to extend: just add new entries to the mapping
 
 ## Configuration
 
-### Scrapped Tickers
+### Ticker Source Mapping
 
-Configure which tickers use scrapers in `lib/data/scrappedTickers.json`:
+Configure which tickers use which source in `lib/utils/ticker-source-map.ts`:
 
-```json
-{
-  "NHFSMKX98": ["fidelity"],
-  "ANOTHER_TICKER": ["fidelity"]
-}
+```typescript
+const TICKER_SOURCE_MAP: Record<string, Source> = {
+  FXAIX: "alpha-vantage",
+  VFIAX: "alpha-vantage",
+  // Add more mappings as needed
+};
 ```
 
-The key is the ticker symbol, and the value is an array of source names (typically just one source).
-
-The key is the scraper name (must match a scraper in the registry), and the value is an array of ticker symbols.
+Default is `finnhub` for unmapped tickers.
 
 ## Project Structure
 
@@ -254,12 +264,9 @@ The key is the scraper name (must match a scraper in the registry), and the valu
 │   ├── utils/
 │   │   ├── stock-data-fetcher.ts  # Fetches data from appropriate source
 │   │   ├── finnhub.ts       # Finnhub API client
-│   │   ├── scraper.ts       # Base scraper class
-│   │   ├── fidelity-scraper.ts   # Fidelity scraper implementation
-│   │   ├── scraper-helper.ts     # Scraper utilities
-│   │   └── scraper-registry.ts   # Scraper registry
-│   └── data/
-│       └── scrappedTickers.json  # Ticker-to-scraper mapping
+│   │   ├── alpha-vantage.ts # Alpha Vantage API client
+│   │   ├── ticker-source-map.ts  # Ticker to source mapping
+│   │   └── market-hours.ts  # Market hours utility
 ├── Dockerfile               # Docker configuration
 ├── docker-compose.yml       # Docker Compose configuration
 ├── tsconfig.json            # TypeScript configuration
@@ -291,17 +298,18 @@ npm run validate
 
 ## Environment Variables
 
-| Variable                        | Description                                | Default        |
-| ------------------------------- | ------------------------------------------ | -------------- |
-| `PORT`                          | Server port                                | `3000`         |
-| `REDIS_HOST`                    | Redis host                                 | `localhost`    |
-| `REDIS_PORT`                    | Redis port                                 | `6379`         |
-| `REDIS_URL`                     | Redis connection URL (overrides host/port) | -              |
-| `FINNHUB_API_KEY`               | Finnhub API key (required)                 | -              |
-| `CACHE_STALE_THRESHOLD_SECONDS` | When to consider cache stale               | `300` (5 min)  |
-| `REFRESH_WORKER_INTERVAL_MS`    | Worker processing interval                 | `2000` (2 sec) |
-| `BACKOFF_INITIAL_SECONDS`       | Initial backoff on rate limit error        | `2`            |
-| `BACKOFF_MAX_SECONDS`           | Maximum backoff time                       | `60`           |
+| Variable                        | Description                                      | Default        |
+| ------------------------------- | ------------------------------------------------ | -------------- |
+| `PORT`                          | Server port                                      | `3000`         |
+| `REDIS_HOST`                    | Redis host                                       | `localhost`    |
+| `REDIS_PORT`                    | Redis port                                       | `6379`         |
+| `REDIS_URL`                     | Redis connection URL (overrides host/port)       | -              |
+| `FINNHUB_API_KEY`               | Finnhub API key (required)                       | -              |
+| `ALPHA_VANTAGE_API_KEY`         | Alpha Vantage API key (required for FXAIX/VFIAX) | -              |
+| `CACHE_STALE_THRESHOLD_SECONDS` | When to consider cache stale                     | `300` (5 min)  |
+| `REFRESH_WORKER_INTERVAL_MS`    | Worker processing interval                       | `2000` (2 sec) |
+| `BACKOFF_INITIAL_SECONDS`       | Initial backoff on rate limit error              | `2`            |
+| `BACKOFF_MAX_SECONDS`           | Maximum backoff time                             | `60`           |
 
 ## Development
 
@@ -331,7 +339,7 @@ npm run validate
    - Set the **Project name**: `stock-api`
    - Set the **Path**: `/volume1/docker/stock-api` (or your preferred path)
    - Paste the contents of `docker-compose.yml` into the editor
-   - Update environment variables if needed (especially `REDIS_URL` and `FINNHUB_API_KEY`)
+   - Update environment variables if needed (especially `REDIS_URL`, `FINNHUB_API_KEY`, and `ALPHA_VANTAGE_API_KEY`)
    - Click **Create** to start the services
 
 **Note:** The `scrappedTickers.json` configuration file is included in the Docker image, so no manual copying is needed. If you want to update the config file without rebuilding the image, uncomment the `volumes` section in `docker-compose.yml` and copy the file to the mounted directory first.
@@ -394,11 +402,13 @@ If you're using Watchtower (included in `docker-compose.yml`), it will:
 
 This means you can simply push code to GitHub, and your production server will automatically update within 30 seconds!
 
-### Adding New Scrapers
+### Adding New Data Sources
 
-1. Create a new scraper class extending `BaseScraper` in `lib/utils/`
-2. Register it in `lib/utils/scraper-registry.ts`
-3. Add tickers to `lib/data/scrappedTickers.json` with the scraper name as the key
+1. Create a new API client class in `lib/utils/` (similar to `finnhub.ts` or `alpha-vantage.ts`)
+2. Add the source to the `Source` type in `lib/utils/ticker-source-map.ts`
+3. Add ticker mappings to `TICKER_SOURCE_MAP` in `lib/utils/ticker-source-map.ts`
+4. Update `fetchStockData()` in `lib/utils/stock-data-fetcher.ts` to handle the new source
+5. Add cache TTL constants in `constants.ts` if needed
 
 ## License
 

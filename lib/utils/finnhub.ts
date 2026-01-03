@@ -1,6 +1,8 @@
 /**
  * Finnhub API client for fetching stock quote data
  */
+import { NormalizedStockData } from "./normalized-stock-data";
+
 export interface FinnhubQuoteResponse {
   c: number; // Current price
   d: number; // Change
@@ -10,17 +12,6 @@ export interface FinnhubQuoteResponse {
   o: number; // Open price of the day
   pc: number; // Previous close price
   t?: number; // Timestamp (optional)
-}
-
-export interface TransformedQuote {
-  currentPrice: number;
-  change: number;
-  percentChange: number;
-  highPrice: number;
-  lowPrice: number;
-  openPrice: number;
-  previousClose: number;
-  timestamp?: number;
 }
 
 export class Finnhub {
@@ -37,9 +28,9 @@ export class Finnhub {
   /**
    * Fetch quote data for a symbol
    * @param symbol - Stock ticker symbol
-   * @returns Transformed quote data with descriptive field names
+   * @returns Normalized stock data
    */
-  async getQuote(symbol: string): Promise<TransformedQuote> {
+  async getQuote(symbol: string): Promise<NormalizedStockData> {
     const url = `${this.baseUrl}/quote?symbol=${encodeURIComponent(symbol)}&token=${this.apiKey}`;
     console.log(
       `[Finnhub.getQuote] Fetching quote for ${symbol} from: ${this.baseUrl}/quote`
@@ -104,20 +95,23 @@ export class Finnhub {
   }
 
   /**
-   * Transform Finnhub response to use descriptive field names
+   * Transform Finnhub response to normalized structure
    * @param data - Raw Finnhub quote response
-   * @returns Transformed quote with descriptive field names
+   * @returns Normalized stock data with common fields and apiMetadata
    */
-  private transformQuote(data: FinnhubQuoteResponse): TransformedQuote {
+  private transformQuote(data: FinnhubQuoteResponse): NormalizedStockData {
     return {
-      currentPrice: data.c,
+      price: data.c, // Map currentPrice to price
       change: data.d,
       percentChange: data.dp,
       highPrice: data.h,
       lowPrice: data.l,
       openPrice: data.o,
       previousClose: data.pc,
-      timestamp: data.t,
+      apiMetadata: {
+        source: "finnhub",
+        timestamp: data.t,
+      },
     };
   }
 }

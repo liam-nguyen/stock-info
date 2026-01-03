@@ -18,13 +18,15 @@ export const BACKOFF_MAX_SECONDS = parseInt(
 );
 
 // Cache TTL Constants (in seconds)
-export const SCRAPPED_CACHE_TTL_SECONDS = 3600; // 1 hour for scrapped tickers
 export const FINNHUB_CACHE_TTL_SECONDS = 300; // 5 minutes for Finnhub tickers
+// Alpha Vantage: 20 requests/day / 2 tickers = 10 requests per ticker per day
+// During market hours (6.5 hours = 23400 seconds): 23400 / 10 = 2340 seconds (~39 minutes)
+export const ALPHA_VANTAGE_CACHE_TTL_SECONDS = 2340; // ~39 minutes for Alpha Vantage tickers
 export const CACHE_TTL_SECONDS = FINNHUB_CACHE_TTL_SECONDS; // Default (backward compatibility)
 
 // Cache Stale Threshold Constants (in seconds)
-export const SCRAPPED_STALE_THRESHOLD_SECONDS = 3600; // 1 hour for scrapped tickers
 export const FINNHUB_STALE_THRESHOLD_SECONDS = 300; // 5 minutes for Finnhub tickers
+export const ALPHA_VANTAGE_STALE_THRESHOLD_SECONDS = 2340; // ~39 minutes for Alpha Vantage tickers
 export const CACHE_STALE_THRESHOLD_SECONDS = parseInt(
   process.env.CACHE_STALE_THRESHOLD_SECONDS || "300",
   10

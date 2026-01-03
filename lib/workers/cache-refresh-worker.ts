@@ -14,6 +14,7 @@ import {
   clearBackoff,
 } from "../utils/rate-limiter";
 import { WORKER_INTERVAL_MS } from "../../constants";
+import { isMarketOpen } from "../utils/market-hours";
 
 let isRunning = false;
 let workerInterval: NodeJS.Timeout | null = null;
@@ -31,13 +32,28 @@ async function processRefreshQueue(): Promise<void> {
       return;
     }
 
-    // Get cached data to check dataType
+    // Skip NHFSMKX98 - it's calculated from FXAIX, not fetched
+    if (ticker === "NHFSMKX98") {
+      console.log(`[RefreshWorker] Skipping NHFSMKX98 (calculated ticker)`);
+      await removeFromRefreshQueue(ticker);
+      return;
+    }
+
+    // Don't refresh when market is closed
+    if (!isMarketOpen()) {
+      console.log(
+        `[RefreshWorker] Market is closed, skipping refresh for ${ticker}`
+      );
+      return;
+    }
+
+    // Get cached data to check source
     const cachedData = await getCachedStock(ticker);
-    const metadata = cachedData?._metadata as { dataType?: string } | undefined;
-    const dataType = metadata?.dataType;
+    const metadata = cachedData?._metadata as { source?: string } | undefined;
+    const source = metadata?.source;
 
     // Check if ticker is still stale (might have been refreshed by another request)
-    const stale = await isCacheStale(ticker, dataType);
+    const stale = await isCacheStale(ticker, source);
     if (!stale) {
       // Cache is fresh, remove from queue
       await removeFromRefreshQueue(ticker);
@@ -57,16 +73,15 @@ async function processRefreshQueue(): Promise<void> {
       const result = await fetchStockData(ticker);
 
       if (result) {
-        // Cache the fresh data with dataType
+        // Cache the fresh data
         await setCachedStock(
           ticker,
-          result.data,
-          result.source,
-          result.dataType
+          result.data as unknown as Record<string, unknown>,
+          result.source
         );
         clearBackoff(ticker); // Clear backoff on success
         console.log(
-          `Successfully refreshed cache for ${ticker} from ${result.source} (dataType: ${result.dataType})`
+          `Successfully refreshed cache for ${ticker} from ${result.source}`
         );
       } else {
         console.warn(`Failed to fetch data for ${ticker}, will retry later`);
