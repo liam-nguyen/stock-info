@@ -26,9 +26,7 @@ Stock quote API using `yahoo-finance2@3.14.0` with Redis caching and staggered r
 Environment variables (defaults included):
 
 - `PORT=3000`
-- `REDIS_HOST=192.168.10.10`
 - `REDIS_PORT=6379`
-- `REDIS_PASSWORD=jayce1scute`
 - `CACHE_TTL_SECONDS=86400`
 - `REFRESH_BASE_MS=3600000`
 - `REFRESH_JITTER_MAX_MS=900000`
