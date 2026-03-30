@@ -1,0 +1,11 @@
+services:
+  stock-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+    ports:
+      - "${HOST_PORT:-38081}:3000"
