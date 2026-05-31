@@ -47,12 +47,6 @@ npm run build
 npm start
 ```
 
-Run tests:
-
-```bash
-npm test
-```
-
 ## Example request
 
 ```bash

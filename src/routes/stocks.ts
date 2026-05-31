@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getStockQuote } from "../services/stockService";
+import { getStockQuotes } from "../services/stockService";
 
 const STOCK_SYMBOL_PATTERN = /^[A-Z0-9.\-]{1,10}$/;
 
@@ -38,7 +38,7 @@ stocksRouter.get("/", async (req, res, next) => {
             });
         }
 
-        const results = await Promise.all(symbols.map((symbol) => getStockQuote(symbol)));
+        const results = await getStockQuotes(symbols);
         return res.status(200).json({
             count: results.length,
             results,

@@ -1,0 +1,18 @@
+# Pre-built image from GHCR (see repo root .github/workflows). For local dev with `docker build`, use docker-compose.yml.
+# Redis is not included — point REDIS_HOST / REDIS_PORT in .env at your own Redis.
+#
+#   docker compose -f docker-compose.image.yml pull
+#   docker compose -f docker-compose.image.yml up -d
+
+services:
+  stock-api:
+    image: ${IMAGE_REGISTRY}/stock-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    env_file:
+      - .env
+    environment:
+      PORT: "3000"
+    ports:
+      - "${STOCK_API_HOST_PORT:-38081}:3000"

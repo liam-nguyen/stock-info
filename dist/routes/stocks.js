@@ -29,7 +29,7 @@ exports.stocksRouter.get("/", async (req, res, next) => {
                 invalidSymbols,
             });
         }
-        const results = await Promise.all(symbols.map((symbol) => (0, stockService_1.getStockQuote)(symbol)));
+        const results = await (0, stockService_1.getStockQuotes)(symbols);
         return res.status(200).json({
             count: results.length,
             results,
