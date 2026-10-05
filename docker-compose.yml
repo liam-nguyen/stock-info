@@ -3,9 +3,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     env_file:
       - .env
     environment:
       PORT: 3000
+    deploy:
+      resources:
+        limits:
+          memory: 320M
     ports:
-      - "${HOST_PORT:-38081}:3000"
+      - "127.0.0.1:${HOST_PORT:-38081}:3000"
+    networks:
+      - redis_default
+
+networks:
+  redis_default:
+    external: true
