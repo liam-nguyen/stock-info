@@ -11,7 +11,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 320M
+          memory: 192M
     ports:
       - "127.0.0.1:${HOST_PORT:-38081}:3000"
     networks:
